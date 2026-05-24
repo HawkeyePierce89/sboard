@@ -104,16 +104,16 @@ A TypeScript web application that:
 
 ### Task 4: World transform extraction from PIXI.DisplayObject
 
-- [ ] create `src/pixi/transform.ts`: `getWorldMatrix(obj: PIXI.DisplayObject): Matrix2D` (type `Matrix2D = [a,b,c,d,tx,ty]`)
-- [ ] implement by walking the parent chain and composing local matrices (`position`, `pivot`, `rotation`, `scale`, `skew`) — DO NOT rely on `worldTransform` because it can be stale without a render pass; alternatively, explicitly call `root.updateTransform()`
-- [ ] write tests `tests/pixi/transform.test.ts`:
+- [x] create `src/pixi/transform.ts`: `getWorldMatrix(obj: PIXI.DisplayObject): Matrix2D` (type `Matrix2D = [a,b,c,d,tx,ty]`)
+- [x] implement by walking the parent chain and composing local matrices (`position`, `pivot`, `rotation`, `scale`, `skew`) — DO NOT rely on `worldTransform` because it can be stale without a render pass; alternatively, explicitly call `root.updateTransform()`
+- [x] write tests `tests/pixi/transform.test.ts`:
   - identity for a default DisplayObject
   - correct translation for `position.set(x, y)`
   - correct rotation for `angle = 30` (with epsilon comparison)
   - correct scaling for `scale.set(sx, sy)`
   - composition of parent + child (the spec example with `subContainer.position.set(75,50)` + `g3`)
   - combined translate+rotate+scale
-- [ ] run tests — all green
+- [x] run tests — all green
 
 ### Task 5: Parse PIXI.Graphics into a neutral CommandList
 
