@@ -183,17 +183,17 @@ A TypeScript web application that:
 
 ### Task 10: App bootstrap — Pixi.Application + Skia.Surface
 
-- [ ] create `src/app.ts` with class `App` that owns:
-  - `pixiApp: PIXI.Application` (constructed with `view: pixiCanvas`, `forceCanvas: true`, `width`, `height`, `backgroundColor: 0xffffff`)
+- [x] create `src/app.ts` with class `App` that owns:
+  - `pixiApp: PIXI.Application` (constructed with `view: pixiCanvas`, `forceCanvas: true`, `width`, `height`, `backgroundColor: 0xffffff`) — `createApp` factory wires this; the `App` constructor itself takes already-resolved dependencies so unit tests can mock them
   - `canvasKit: CanvasKit`
-  - `skiaSurface: SkSurface` (`canvasKit.MakeWebGLCanvasSurface` is NOT suitable — use `MakeSWCanvasSurface(skiaCanvas)` to stay compatible with `forceCanvas`)
-  - `currentScene: PIXI.Container` — current root container
+  - `skiaSurface: SkSurface` — created via `MakeSWCanvasSurface(skiaCanvas)` inside `createApp` so the Software backend matches `forceCanvas: true`; factory throws a descriptive error when CanvasKit returns null
+  - `currentScene: PIXI.Container` — current root container, swapped wholesale by `setScene`
   - `renderer: PixiToSkiaRenderer`
-- [ ] `redrawSkia()`: clears the Skia surface, renders `currentScene`, calls `surface.flush()`
-- [ ] `setScene(container)`: swaps the root on `pixiApp.stage` and `currentScene`, then calls `redrawSkia()`
-- [ ] initial scene — the spec example (g1 ellipse, g2 rect, g3+g4 lines in subContainer)
-- [ ] write `tests/app.test.ts` with PIXI and CanvasKit mocks: constructor wires correctly, `setScene` refreshes both canvases
-- [ ] run tests
+- [x] `redrawSkia()`: clears the Skia surface, renders `currentScene`, calls `surface.flush()` — clear color derives from the `backgroundColor` option (defaults to white `0xffffff`) so both canvases agree
+- [x] `setScene(container)`: swaps the root on `pixiApp.stage` and `currentScene`, then calls `redrawSkia()` — uses `stage.removeChildren()` for a clean swap regardless of prior state
+- [x] initial scene — the spec example (g1 ellipse, g2 rect, g3+g4 lines in subContainer) — implemented in `src/pixi/initial-scene.ts` (`buildInitialScene()`); objects tagged with stable `name` values (`g1`, `g2`, `subContainer`, `g3`, `g4`) so Task 11 / Task 12 can dispatch events back to them. `src/main.ts` exposes a new `start()` async entry that wires the canvases, CanvasKit, and the App, auto-running in the browser only when `#pixi-canvas` exists (so the smoke test stays unaffected). Also switched `Application` import to `pixi.js-legacy` so `forceCanvas: true` actually registers a Canvas renderer.
+- [x] write `tests/app.test.ts` with PIXI and CanvasKit mocks: constructor wires correctly, `setScene` refreshes both canvases — 14 App specs (constructor wiring + default/custom background color + immediate `clear/render/flush` ordering; `setScene` updates `currentScene`, swaps stage children, redraws Skia; `redrawSkia` order invariant and canvas passthrough; `createApp` error path + happy path including a real `pixi.js-legacy` Application). Plus 7 `tests/pixi/initial-scene.test.ts` specs covering tree shape, node names, sub-container position, g1 ellipse / g2 rect commands, g3 spec line (width 10, white, 0,0→150,100), g4 line presence, and per-call instance independence.
+- [x] run tests — 123 total now pass (was 102 before this task); `npm run typecheck` and `npm run lint` clean
 
 ### Task 11: pointerdown/pointerup on the Pixi canvas
 
