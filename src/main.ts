@@ -9,6 +9,7 @@ import {
   getCanvasById,
   getElementById,
 } from './ui/dom';
+import { wireExportButton } from './ui/export-button';
 import { addRandomShape } from './ui/random-shape';
 import { createStatusReporter, type StatusReporter } from './ui/status';
 
@@ -57,6 +58,17 @@ export async function start(): Promise<App> {
   });
 
   wireGenerateButton(app, status);
+  wireExportButton(
+    {
+      canvasKit,
+      scene: () => app.currentScene,
+      width: CANVAS_WIDTH,
+      height: CANVAS_HEIGHT,
+    },
+    {
+      onStatus: status ? (text) => status.message(text) : undefined,
+    },
+  );
 
   return app;
 }

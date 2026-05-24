@@ -209,4 +209,13 @@ describe('createStatusReporter / formatStatus', () => {
     reporter.reset();
     expect(el.textContent).toBe('ready');
   });
+
+  it('message() sets arbitrary text on the target (used by PDF export progress)', () => {
+    const el = document.createElement('pre');
+    const reporter = createStatusReporter(el);
+    reporter.message('Generating PDF…');
+    expect(el.textContent).toBe('Generating PDF…');
+    reporter.message('PDF ready');
+    expect(el.textContent).toBe('PDF ready');
+  });
 });

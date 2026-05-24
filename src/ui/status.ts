@@ -3,6 +3,12 @@ import type { InteractionStatusEvent } from '../pixi/scene-builder';
 export interface StatusReporter {
   report(event: InteractionStatusEvent): void;
   reset(): void;
+  /**
+   * Set the status to an arbitrary text string. Used by long-running
+   * operations (e.g. PDF export) that need to surface progress text
+   * outside of the {@link InteractionStatusEvent} pointer-event shape.
+   */
+  message(text: string): void;
 }
 
 export function createStatusReporter(target: HTMLElement): StatusReporter {
@@ -12,6 +18,9 @@ export function createStatusReporter(target: HTMLElement): StatusReporter {
     },
     reset() {
       target.textContent = 'ready';
+    },
+    message(text) {
+      target.textContent = text;
     },
   };
 }

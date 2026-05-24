@@ -240,11 +240,11 @@ A TypeScript web application that:
 
 ### Task 14: "Export to PDF" button in the UI
 
-- [ ] add an `Export to PDF` button to the UI
-- [ ] the handler calls `exportToPDF(canvasKit, app.currentScene, width, height)`, receives a Blob, creates `URL.createObjectURL`, and triggers a download (`<a download="scene.pdf">`)
-- [ ] show a "generating..." indicator during export
-- [ ] write `tests/ui/export-button.test.ts` (jsdom + mocked exportToPDF): a click initiates the export, an error path surfaces a message
-- [ ] run tests
+- [x] add an `Export to PDF` button to the UI — already present from the Task 9 layout (`#btn-export-pdf` in `index.html`); this task wires the click handler in `src/ui/export-button.ts` and connects it from `src/main.ts` (`wireExportButton`)
+- [x] the handler calls `exportToPDF(canvasKit, app.currentScene, width, height)`, receives a Blob, creates `URL.createObjectURL`, and triggers a download (`<a download="scene.pdf">`) — the scene is resolved lazily via a `scene: () => app.currentScene` callback so shapes added via "Generate random shape" between exports are picked up. `defaultTriggerDownload` creates a hidden anchor, clicks it, removes it, and revokes the object URL. Both `exportFn` and `triggerDownload` are injectable so the unit tests stay independent of CanvasKit and of jsdom's blob-URL plumbing.
+- [x] show a "generating..." indicator during export — button is `disabled=true` and its label flips to "Generating…" while the export promise is in flight; restored in a `finally` so a failed export does not leave the UI stuck. A new `StatusReporter.message(text)` method was added (mirroring `report`/`reset`) and is wired through `onStatus` so the status block also shows "Generating PDF…" / "PDF ready — scene.pdf" / a friendly error message. Re-entrant clicks while pending are ignored (the second click sees `button.disabled === true`).
+- [x] write `tests/ui/export-button.test.ts` (jsdom + mocked exportToPDF): a click initiates the export, an error path surfaces a message — 18 specs covering: exportFn invoked with (canvasKit, scene, w, h); scene re-evaluated per click; default filename `scene.pdf` and custom filename overrides; button disabled + "Generating…" label during pending and restored after; onStatus emits `Generating PDF…` then `PDF ready — scene.pdf`; re-entrant click suppression; generic Error → `PDF export failed: <msg>`; `PDFExportNotSupportedError` → `PDF export unavailable: …`; non-Error rejections (string/null/object) fall through to `PDF export failed`; missing button no-ops; custom buttonId resolves correctly; integration sanity with a real `Graphics`; `defaultTriggerDownload` calls `URL.createObjectURL`, sets `download`/`href`, clicks the anchor, removes it, and revokes the URL. Plus 1 new spec for `StatusReporter.message()` in `tests/pixi/events.test.ts`.
+- [x] run tests — 200 total pass (was 181 before this task: 19 new specs); `npm run typecheck` and `npm run lint` clean
 
 ### Task 15: GitHub Actions deploy to GitHub Pages
 
