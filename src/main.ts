@@ -39,7 +39,9 @@ export async function start(): Promise<App> {
 
   const status = resolveStatusReporter();
 
-  const canvasKit = await initCanvasKit();
+  const canvasKit = await initCanvasKit({
+    basePath: `${import.meta.env.BASE_URL}canvaskit/`,
+  });
   const scene = buildInitialScene();
   attachSpecInteractions(scene, {
     onEvent: status ? (event) => status.report(event) : undefined,

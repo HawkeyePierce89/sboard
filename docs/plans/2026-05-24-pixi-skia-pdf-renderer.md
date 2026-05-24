@@ -248,14 +248,14 @@ A TypeScript web application that:
 
 ### Task 15: GitHub Actions deploy to GitHub Pages
 
-- [ ] create `.github/workflows/deploy.yml`:
-  - trigger: push to `master`
-  - jobs: `build` (Node 20, `npm ci`, `npm run typecheck`, `npm test`, `npm run lint`, `npm run build` with `VITE_BASE=/sboard/`), `deploy` (using `actions/deploy-pages`)
-  - ⚠️ do not build CanvasKit in CI — commit `public/canvaskit/*` artifacts into the repo (or attach as a git-lfs / release asset)
-- [ ] in `vite.config.ts`, read `VITE_BASE` from env
-- [ ] verify the workflow is syntactically valid (`act` locally or careful YAML)
-- [ ] add `tests/build.test.ts` checking `npm run build` succeeds (a slow test that can be marked `it.concurrent.skipIf(process.env.CI !== 'true')`)
-- [ ] run tests
+- [x] create `.github/workflows/deploy.yml`:
+  - trigger: push to `master` (plus `workflow_dispatch` for manual reruns)
+  - jobs: `build` (Node 20, `npm ci`, `npm run typecheck`, `npm test`, `npm run lint`, `npm run build` with `VITE_BASE=/sboard/`), `deploy` (using `actions/deploy-pages@v4`) — `permissions` block grants `pages: write` and `id-token: write`; `concurrency` group `pages` (no cancel-in-progress so an in-flight deploy is never interrupted)
+  - ⚠️ do not build CanvasKit in CI — `public/canvaskit/canvaskit.{js,wasm}` are committed (stock 0.41.1 build per Plan B in Task 2); the workflow just copies the `public/` tree via `vite build`
+- [x] in `vite.config.ts`, read `VITE_BASE` from env — already wired in Task 1 (`base: process.env.VITE_BASE ?? '/'`); also added `src/vite-env.d.ts` (`/// <reference types="vite/client" />`) and updated `src/main.ts` to pass `basePath: \`${import.meta.env.BASE_URL}canvaskit/\`` to `initCanvasKit()` so the runtime CanvasKit fetch honours the same base — otherwise the deployed app would 404 on `/canvaskit/canvaskit.wasm` instead of `/sboard/canvaskit/canvaskit.wasm`
+- [x] verify the workflow is syntactically valid (`act` locally or careful YAML) — validated via `npx yaml valid` (exit 0) and a `yaml --json` round-trip that confirms the parsed structure: `on.push.branches=[master]`, both jobs, all 9 build steps in order, `VITE_BASE` env, deploy `needs: build` and uses `actions/deploy-pages@v4`
+- [x] add `tests/build.test.ts` checking `npm run build` succeeds (a slow test that can be marked `it.concurrent.skipIf(process.env.CI !== 'true')`) — used plain `it.skipIf(!SHOULD_RUN)` (`SHOULD_RUN = process.env.CI === 'true'`); the gated spec spawns `npm run build` with `VITE_BASE=/sboard/`, asserts a clean exit, that `dist/index.html` contains a `/sboard/assets/` rewrite, and that `dist/canvaskit/canvaskit.wasm` was copied wholesale (size > 1 MB). A second always-on spec guards the skip predicate itself so an accidental gate-flip is caught. Verified that with `CI=true` the build spec runs and produces `/sboard/` paths; without `CI` it is skipped (`↓` in vitest verbose output)
+- [x] run tests — 201 passed + 1 skipped (the build spec) locally; with `CI=true` 202/202 pass. `npm run lint` and `npm run typecheck` clean
 
 ### Task 16: README with run instructions
 
