@@ -3,10 +3,47 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>sboard</title>
+    <title>sboard — Pixi → Skia → PDF</title>
+    <link rel="stylesheet" href="/src/ui/styles.css" />
   </head>
   <body>
-    <div id="app"></div>
+    <div id="app" class="app">
+      <aside class="sidebar">
+        <h1 class="sidebar__title">sboard</h1>
+        <div class="sidebar__buttons">
+          <button id="btn-generate" type="button" class="btn">
+            Generate random shape
+          </button>
+          <button id="btn-export-pdf" type="button" class="btn">
+            Export to PDF
+          </button>
+        </div>
+        <section class="status" aria-live="polite">
+          <h2 class="status__title">Status</h2>
+          <pre id="status-log" class="status__log">ready</pre>
+        </section>
+      </aside>
+      <main class="stage">
+        <figure class="canvas-frame">
+          <figcaption class="canvas-frame__label">Canvas1 Pixi.js</figcaption>
+          <canvas
+            id="pixi-canvas"
+            class="canvas-frame__canvas"
+            width="500"
+            height="400"
+          ></canvas>
+        </figure>
+        <figure class="canvas-frame">
+          <figcaption class="canvas-frame__label">Canvas2 Skia</figcaption>
+          <canvas
+            id="skia-canvas"
+            class="canvas-frame__canvas"
+            width="500"
+            height="400"
+          ></canvas>
+        </figure>
+      </main>
+    </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

@@ -174,12 +174,12 @@ A TypeScript web application that:
 
 ### Task 9: UI shell (HTML/CSS, two-canvas layout)
 
-- [ ] create `index.html` with layout: left column (`<aside>` with buttons + status block), right area (`<main>` with two `<canvas>` elements labeled `Canvas1 Pixi.js` and `Canvas2 Skia`)
-- [ ] create `src/ui/styles.css` — flexbox layout, labels above canvases, borders around canvases, button styles (no UI framework)
-- [ ] fixed canvas size (e.g., 500×400 to fit a typical viewport), `devicePixelRatio` handling for crisp output
-- [ ] create `src/ui/dom.ts` with strictly typed helpers for resolving elements by id (`getCanvasById`, `getButtonById`) that throw on missing elements
-- [ ] write `tests/ui/dom.test.ts` (jsdom) verifying helpers find elements and throw a typed error when missing
-- [ ] run tests
+- [x] create `index.html` with layout: left column (`<aside>` with buttons + status block), right area (`<main>` with two `<canvas>` elements labeled `Canvas1 Pixi.js` and `Canvas2 Skia`)
+- [x] create `src/ui/styles.css` — flexbox layout, labels above canvases, borders around canvases, button styles (no UI framework)
+- [x] fixed canvas size (e.g., 500×400 to fit a typical viewport), `devicePixelRatio` handling for crisp output — canvases declared at 500×400 in both HTML attributes and CSS; `configureCanvasForDPR()` in `src/ui/dom.ts` resizes the backing store to `cssSize × devicePixelRatio` while keeping the CSS box constant (App in Task 10 will call it at startup)
+- [x] create `src/ui/dom.ts` with strictly typed helpers for resolving elements by id (`getCanvasById`, `getButtonById`) that throw on missing elements — also exports a generic `getElementById<T>(id, ctor)` and a `DomLookupError` class so future callers can resolve any tag without leaking `null`
+- [x] write `tests/ui/dom.test.ts` (jsdom) verifying helpers find elements and throw a typed error when missing — 14 specs: success + tag-mismatch + missing-id paths for `getElementById`/`getCanvasById`/`getButtonById`, plus DPR helper specs (custom dpr scaling, dpr=1 default, non-positive dpr clamped to 1, sub-pixel rounding floor of 1)
+- [x] run tests — all 102 tests pass, `npm run typecheck` and `npm run lint` clean
 
 ### Task 10: App bootstrap — Pixi.Application + Skia.Surface
 
