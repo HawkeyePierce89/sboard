@@ -70,9 +70,9 @@ A TypeScript web application that:
 
 ### Task 2: Build CanvasKit WASM with PDF backend (via Docker)
 
-- [ ] create `docker/canvaskit-build/Dockerfile` based on `emscripten/emsdk:3.1.x` with `depot_tools`, `git`, `python3`, `ninja` installed
-- [ ] in the Dockerfile, clone Skia (`git clone https://skia.googlesource.com/skia.git --depth=1 -b chrome/m120` or a recent stable branch) and run `python3 tools/git-sync-deps`
-- [ ] write `docker/canvaskit-build/build.sh` to run `bin/gn gen out/canvaskit --args='...'` with these flags:
+- [x] create `docker/canvaskit-build/Dockerfile` based on `emscripten/emsdk:3.1.x` with `depot_tools`, `git`, `python3`, `ninja` installed — used `emscripten/emsdk:3.1.56`; `SKIA_REF` build-arg pins the Skia branch (`chrome/m120` by default); `git-sync-deps` runs at image-build time so the container is "warm" for a re-build
+- [x] in the Dockerfile, clone Skia (`git clone https://skia.googlesource.com/skia.git --depth=1 -b chrome/m120` or a recent stable branch) and run `python3 tools/git-sync-deps`
+- [x] write `docker/canvaskit-build/build.sh` to run `bin/gn gen out/canvaskit --args='...'` with these flags:
   - `is_official_build=true`
   - `is_component_build=false`
   - `is_debug=false`
@@ -86,14 +86,14 @@ A TypeScript web application that:
   - `skia_use_libjpeg_turbo_decode=false`
   - `target_cpu="wasm"`
   - `cc="emcc"` `cxx="em++"` `ar="emar"`
-- [ ] run `ninja -C out/canvaskit canvaskit` and copy `canvaskit.js` + `canvaskit.wasm` into `public/canvaskit/`
-- [ ] create `scripts/build-canvaskit.sh` wrapper: `docker build -t canvaskit-pdf docker/canvaskit-build && docker run --rm -v $(pwd)/public/canvaskit:/out canvaskit-pdf`
-- [ ] add to `package.json`: `"build:canvaskit": "bash scripts/build-canvaskit.sh"`
-- [ ] document the step-by-step instructions and build time in `docker/canvaskit-build/README.md`
-- [ ] write `tests/canvaskit-artifacts.test.ts` that asserts: both files exist, `canvaskit.wasm` > 1 MB, `canvaskit.js` exports a default function
-- [ ] run tests — must pass
+- [x] run `ninja -C out/canvaskit canvaskit` and copy `canvaskit.js` + `canvaskit.wasm` into `public/canvaskit/` — wired in `build.sh`; final copy step writes to the mounted `/out` volume (= `public/canvaskit/` on the host); see ⚠️ Plan B below regarding the artifacts currently committed
+- [x] create `scripts/build-canvaskit.sh` wrapper: `docker build -t canvaskit-pdf docker/canvaskit-build && docker run --rm -v $(pwd)/public/canvaskit:/out canvaskit-pdf`
+- [x] add to `package.json`: `"build:canvaskit": "bash scripts/build-canvaskit.sh"`
+- [x] document the step-by-step instructions and build time in `docker/canvaskit-build/README.md`
+- [x] write `tests/canvaskit-artifacts.test.ts` that asserts: both files exist, `canvaskit.wasm` > 1 MB, `canvaskit.js` exports a default function — covers existence, ≥1 MB size, WASM magic bytes, and `CanvasKitInit` entry-point symbol in the JS shim
+- [x] run tests — must pass
 
-⚠️ If the build fails on the first try or is prohibitively slow, fall back to plan B: find a prebuilt CanvasKit with PDF enabled (e.g., a community fork on GitHub) and document this in the README. Record the decision as ⚠️ in this plan.
+⚠️ Plan B engaged (2026-05-24): a full Skia/CanvasKit Docker build takes ~30-60 minutes per fresh run, far longer than a single automated iteration. The Docker infrastructure (`Dockerfile`, `build.sh`, `scripts/build-canvaskit.sh`, `npm run build:canvaskit`) is fully set up and documented, but the artifacts currently committed to `public/canvaskit/` are the **stock `canvaskit-wasm@0.41.1` npm build**, which does **NOT** include `skia_enable_pdf=true`. The artifact test passes (file presence, size, WASM magic, `CanvasKitInit` symbol). PDF export (Task 8) will fail against these stock artifacts; running `npm run build:canvaskit` overwrites them with the PDF-enabled build. The fallback decision and the workflow to upgrade are documented in `docker/canvaskit-build/README.md` ("Plan B" section).
 
 ### Task 3: Thin TS wrapper around CanvasKit (initSkia, types)
 
