@@ -484,6 +484,30 @@ describe('PixiToSkiaRenderer — multi-shape Graphics', () => {
     const secondPath = canvas.drawPath.mock.calls[1][0] as SpyPath;
     expect(firstPath._builderId).not.toBe(secondPath._builderId);
   });
+
+  it('does not carry a stroke from a previous entry into a later entry that has no stroke command', () => {
+    const mock = makeMockCanvasKit();
+    const canvas = makeMockCanvas();
+    const renderer = new PixiToSkiaRenderer(mock.ck);
+
+    const root = new Container();
+    const g = new Graphics();
+    // Entry 1: stroked + filled rect.
+    g.lineStyle(2, 0x222222, 1)
+      .beginFill(0xff0000, 1)
+      .drawRect(0, 0, 5, 5)
+      .endFill();
+    // Entry 2: fill-only circle (stroke explicitly disabled).
+    g.lineStyle(0).beginFill(0x00ff00, 1).drawCircle(20, 20, 4).endFill();
+    root.addChild(g);
+
+    renderer.renderContainer(castCanvas(canvas), root);
+
+    // Entry 1 draws twice (fill + stroke). Entry 2 must draw only once
+    // (fill). Without the `endEntry` reset, the strokePaint from entry 1
+    // would carry over and draw a third stroke for the circle.
+    expect(canvas.drawPath).toHaveBeenCalledTimes(3);
+  });
 });
 
 describe('PixiToSkiaRenderer — sprites', () => {

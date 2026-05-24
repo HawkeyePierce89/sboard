@@ -177,6 +177,17 @@ export class PixiToSkiaRenderer {
           case 'closePath':
             ensureBuilder().close();
             break;
+          case 'endEntry':
+            flush();
+            if (fillPaint) {
+              fillPaint.delete();
+              fillPaint = null;
+            }
+            if (strokePaint) {
+              strokePaint.delete();
+              strokePaint = null;
+            }
+            break;
         }
       }
       flush();

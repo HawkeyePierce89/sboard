@@ -14,6 +14,7 @@ describe('extractCommands — fills', () => {
     expect(cmds).toEqual<DrawCommand[]>([
       { type: 'fill', color: 0xff0000, alpha: 0.5 },
       { type: 'rect', x: 10, y: 20, w: 100, h: 50 },
+      { type: 'endEntry' },
     ]);
   });
 
@@ -25,6 +26,7 @@ describe('extractCommands — fills', () => {
     expect(cmds).toEqual<DrawCommand[]>([
       { type: 'fill', color: 0x00ff00, alpha: 1 },
       { type: 'ellipse', cx: 50, cy: 60, rx: 40, ry: 20 },
+      { type: 'endEntry' },
     ]);
   });
 
@@ -36,6 +38,7 @@ describe('extractCommands — fills', () => {
     expect(cmds).toEqual<DrawCommand[]>([
       { type: 'fill', color: 0x0000ff, alpha: 0.8 },
       { type: 'circle', cx: 30, cy: 40, r: 25 },
+      { type: 'endEntry' },
     ]);
   });
 });
@@ -50,6 +53,7 @@ describe('extractCommands — strokes (moveTo/lineTo via Polygon)', () => {
       { type: 'stroke', width: 4, color: 0x123456, alpha: 0.9 },
       { type: 'moveTo', x: 10, y: 20 },
       { type: 'lineTo', x: 30, y: 40 },
+      { type: 'endEntry' },
     ]);
   });
 
@@ -62,6 +66,7 @@ describe('extractCommands — strokes (moveTo/lineTo via Polygon)', () => {
       { type: 'stroke', width: 10, color: 0xffffff, alpha: 1 },
       { type: 'moveTo', x: 0, y: 0 },
       { type: 'lineTo', x: 150, y: 100 },
+      { type: 'endEntry' },
     ]);
   });
 
@@ -80,6 +85,7 @@ describe('extractCommands — strokes (moveTo/lineTo via Polygon)', () => {
       { type: 'lineTo', x: 10, y: 0 },
       { type: 'lineTo', x: 10, y: 10 },
       { type: 'lineTo', x: 0, y: 10 },
+      { type: 'endEntry' },
     ]);
   });
 
@@ -97,6 +103,7 @@ describe('extractCommands — strokes (moveTo/lineTo via Polygon)', () => {
       { type: 'lineTo', x: 10, y: 10 },
       { type: 'lineTo', x: 0, y: 10 },
       { type: 'closePath' },
+      { type: 'endEntry' },
     ]);
   });
 });
@@ -114,6 +121,7 @@ describe('extractCommands — combined fill + stroke', () => {
       { type: 'fill', color: 0xff8800, alpha: 0.5 },
       { type: 'stroke', width: 3, color: 0x222222, alpha: 1 },
       { type: 'rect', x: 0, y: 0, w: 20, h: 10 },
+      { type: 'endEntry' },
     ]);
   });
 });
@@ -128,8 +136,10 @@ describe('extractCommands — multi-shape Graphics', () => {
     expect(cmds).toEqual<DrawCommand[]>([
       { type: 'fill', color: 0xff0000, alpha: 1 },
       { type: 'rect', x: 0, y: 0, w: 5, h: 5 },
+      { type: 'endEntry' },
       { type: 'fill', color: 0x00ff00, alpha: 1 },
       { type: 'circle', cx: 20, cy: 20, r: 4 },
+      { type: 'endEntry' },
     ]);
   });
 
@@ -146,6 +156,7 @@ describe('extractCommands — multi-shape Graphics', () => {
     expect(cmds).toEqual<DrawCommand[]>([
       { type: 'stroke', width: 1, color: 0x000000, alpha: 1 },
       { type: 'rect', x: 0, y: 0, w: 10, h: 10 },
+      { type: 'endEntry' },
     ]);
   });
 });
@@ -160,6 +171,7 @@ describe('extractCommands — pending polygon commit', () => {
       { type: 'stroke', width: 1, color: 0x000000, alpha: 1 },
       { type: 'moveTo', x: 0, y: 0 },
       { type: 'lineTo', x: 5, y: 5 },
+      { type: 'endEntry' },
     ]);
   });
 });

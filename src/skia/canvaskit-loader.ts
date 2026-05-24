@@ -17,9 +17,38 @@ const DEFAULT_BASE_PATH = '/canvaskit/';
 
 let cached: Promise<CanvasKit> | null = null;
 
+// CanvasKit's `canvaskit.js` is a UMD/IIFE bundle that assigns a global
+// `CanvasKitInit` via `var` at script scope. Dynamic `import()` would
+// treat it as ESM and the `var` would never leak to `window`, so we load
+// it as a classic `<script>` tag and read `globalThis.CanvasKitInit`.
 function defaultLoadModule(basePath: string): Promise<CanvasKitModule> {
-  const url = `${basePath}canvaskit.js`;
-  return import(/* @vite-ignore */ url) as Promise<CanvasKitModule>;
+  return new Promise((resolve, reject) => {
+    if (typeof document === 'undefined') {
+      reject(new Error('canvaskit-loader: no document — cannot inject script'));
+      return;
+    }
+    const existing = readGlobalInit();
+    if (existing) {
+      resolve({ default: existing });
+      return;
+    }
+    const url = `${basePath}canvaskit.js`;
+    const script = document.createElement('script');
+    script.src = url;
+    script.async = true;
+    script.onload = () => {
+      const init = readGlobalInit();
+      if (init) resolve({ default: init });
+      else reject(new Error(`canvaskit-loader: ${url} did not define globalThis.CanvasKitInit`));
+    };
+    script.onerror = () => reject(new Error(`canvaskit-loader: failed to load ${url}`));
+    document.head.appendChild(script);
+  });
+}
+
+function readGlobalInit(): CanvasKitInitFn | null {
+  const g = globalThis as { CanvasKitInit?: CanvasKitInitFn };
+  return typeof g.CanvasKitInit === 'function' ? g.CanvasKitInit : null;
 }
 
 export function initCanvasKit(

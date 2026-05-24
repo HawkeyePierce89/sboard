@@ -16,7 +16,12 @@ export type DrawCommand =
   | { type: 'rect'; x: number; y: number; w: number; h: number }
   | { type: 'ellipse'; cx: number; cy: number; rx: number; ry: number }
   | { type: 'circle'; cx: number; cy: number; r: number }
-  | { type: 'closePath' };
+  | { type: 'closePath' }
+  // Marks the boundary between PIXI `graphicsData` entries so the
+  // renderer can flush and clear both paint slots — otherwise a fill or
+  // stroke from a previous entry would silently apply to the next one
+  // when the next entry omits the corresponding style command.
+  | { type: 'endEntry' };
 
 function emitStyles(out: DrawCommand[], data: GraphicsData): void {
   const { fillStyle, lineStyle } = data;
@@ -80,6 +85,7 @@ export function extractCommands(g: Graphics): DrawCommand[] {
   for (const data of g.geometry.graphicsData) {
     emitStyles(out, data);
     emitShape(out, data);
+    out.push({ type: 'endEntry' });
   }
   return out;
 }

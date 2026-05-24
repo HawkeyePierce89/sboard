@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CanvasKit, CanvasKitInitOptions } from 'canvaskit-wasm';
 import {
   _resetCanvasKitCacheForTests,
@@ -130,5 +130,92 @@ describe('initCanvasKit', () => {
     await expect(initCanvasKit({ loadModule })).rejects.toThrow(
       /default CanvasKitInit function/,
     );
+  });
+});
+
+// The default loadModule injects a `<script>` tag and reads
+// `globalThis.CanvasKitInit` (because canvaskit.js is a UMD/IIFE bundle
+// that defines `var CanvasKitInit` at script scope; dynamic ESM import
+// would silently lose it).
+describe('initCanvasKit — default loadModule (script injection)', () => {
+  beforeEach(() => {
+    _resetCanvasKitCacheForTests();
+  });
+
+  afterEach(() => {
+    delete (globalThis as { CanvasKitInit?: unknown }).CanvasKitInit;
+    document.querySelectorAll('script[data-test-canvaskit]').forEach((s) => {
+      s.remove();
+    });
+  });
+
+  it('injects a <script> tag and reads CanvasKitInit off globalThis on load', async () => {
+    const fake = makeFakeCanvasKit('via-script');
+    const initSpy = makeInitSpy(fake);
+
+    const origAppendChild = HTMLHeadElement.prototype.appendChild;
+    const appendSpy = vi
+      .spyOn(HTMLHeadElement.prototype, 'appendChild')
+      .mockImplementation(function <T extends Node>(this: HTMLHeadElement, node: T): T {
+        const result = origAppendChild.call(this, node) as T;
+        if (node instanceof HTMLScriptElement) {
+          node.setAttribute('data-test-canvaskit', 'true');
+          (globalThis as { CanvasKitInit?: unknown }).CanvasKitInit = initSpy;
+          queueMicrotask(() => node.dispatchEvent(new Event('load')));
+        }
+        return result;
+      });
+
+    try {
+      const ck = await initCanvasKit({ basePath: '/canvaskit/' });
+      expect(ck).toBe(fake);
+      expect(initSpy).toHaveBeenCalledTimes(1);
+      const opts = initSpy.mock.calls[0][0] as CanvasKitInitOptions;
+      expect(opts.locateFile?.('canvaskit.wasm')).toBe(
+        '/canvaskit/canvaskit.wasm',
+      );
+    } finally {
+      appendSpy.mockRestore();
+    }
+  });
+
+  it('rejects when the script fires onerror', async () => {
+    const appendSpy = vi
+      .spyOn(HTMLHeadElement.prototype, 'appendChild')
+      .mockImplementation(function <T extends Node>(this: HTMLHeadElement, node: T): T {
+        if (node instanceof HTMLScriptElement) {
+          node.setAttribute('data-test-canvaskit', 'true');
+          queueMicrotask(() => node.dispatchEvent(new Event('error')));
+        }
+        return node;
+      });
+
+    try {
+      await expect(initCanvasKit({ basePath: '/canvaskit/' })).rejects.toThrow(
+        /failed to load/,
+      );
+    } finally {
+      appendSpy.mockRestore();
+    }
+  });
+
+  it('rejects when the script loads but CanvasKitInit is not defined globally', async () => {
+    const appendSpy = vi
+      .spyOn(HTMLHeadElement.prototype, 'appendChild')
+      .mockImplementation(function <T extends Node>(this: HTMLHeadElement, node: T): T {
+        if (node instanceof HTMLScriptElement) {
+          node.setAttribute('data-test-canvaskit', 'true');
+          queueMicrotask(() => node.dispatchEvent(new Event('load')));
+        }
+        return node;
+      });
+
+    try {
+      await expect(initCanvasKit({ basePath: '/canvaskit/' })).rejects.toThrow(
+        /did not define globalThis\.CanvasKitInit/,
+      );
+    } finally {
+      appendSpy.mockRestore();
+    }
   });
 });

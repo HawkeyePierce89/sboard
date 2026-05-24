@@ -4,7 +4,6 @@ import { attachSpecInteractions, makeInteractive } from './pixi/scene-builder';
 import { initCanvasKit } from './skia/canvaskit-loader';
 import {
   DomLookupError,
-  configureCanvasForDPR,
   getButtonById,
   getCanvasById,
   getElementById,
@@ -34,8 +33,11 @@ export async function start(): Promise<App> {
   const pixiCanvas = getCanvasById('pixi-canvas');
   const skiaCanvas = getCanvasById('skia-canvas');
 
-  configureCanvasForDPR(pixiCanvas, CANVAS_WIDTH, CANVAS_HEIGHT);
-  configureCanvasForDPR(skiaCanvas, CANVAS_WIDTH, CANVAS_HEIGHT);
+  // Both canvases keep their HTML-attribute backing-store size (500x400
+  // in CSS pixels). Honoring devicePixelRatio would require also passing
+  // `resolution` / `autoDensity` into the PIXI Application and scaling
+  // the Skia surface — which is out of scope here, and skipping it keeps
+  // the two canvases pixel-for-pixel comparable.
 
   const status = resolveStatusReporter();
 

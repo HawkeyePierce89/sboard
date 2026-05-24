@@ -55,6 +55,7 @@ describe('walkContainer — basic node typing', () => {
     expect(gfx.commands).toEqual([
       { type: 'fill', color: 0xff0000, alpha: 1 },
       { type: 'rect', x: 0, y: 0, w: 10, h: 10 },
+      { type: 'endEntry' },
     ]);
     expectMatrixApprox(gfx.matrix, [1, 0, 0, 1, 0, 0]);
   });
@@ -105,6 +106,7 @@ describe('walkContainer — nested containers (spec example)', () => {
       { type: 'stroke', width: 10, color: 0xffffff, alpha: 1 },
       { type: 'moveTo', x: 0, y: 0 },
       { type: 'lineTo', x: 150, y: 100 },
+      { type: 'endEntry' },
     ]);
   });
 
