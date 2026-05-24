@@ -144,18 +144,19 @@ A TypeScript web application that:
 
 ### Task 7: PixiToSkiaRenderer — render the CommandList into a CanvasKit Canvas
 
-- [ ] create `src/skia/renderer.ts` with class `PixiToSkiaRenderer`; the constructor takes a `CanvasKit` instance
-- [ ] method `render(canvas: SkCanvas, node: SkiaSceneNode): void` — walks the tree, applies `canvas.save()/concat(matrix)/restore()`, renders graphics commands via `SkPath` + `SkPaint`, renders sprites via `canvas.drawImage`
-- [ ] correctly map colors (Pixi accepts `'#ff0000'` → convert to CanvasKit `Color4f` or uint32)
-- [ ] correctly map fill vs. stroke to `Paint.Style`
-- [ ] for ellipses, use `path.addOval()`
-- [ ] method `renderContainer(canvas, container)`: helper that invokes walker + render
-- [ ] write tests `tests/skia/renderer.test.ts` with a CanvasKit mock (spy on `save`/`restore`/`concat`/`drawPath`/`drawImage`):
+- [x] create `src/skia/renderer.ts` with class `PixiToSkiaRenderer`; the constructor takes a `CanvasKit` instance — also accepts an optional `imageProvider(texture)` callback so the sprite branch is testable without booting the full WASM module
+- [x] method `render(canvas: SkCanvas, node: SkiaSceneNode): void` — walks the tree, applies `canvas.save()/concat(matrix)/restore()`, renders graphics commands via `SkPath` + `SkPaint`, renders sprites via `canvas.drawImage` — because the walker stores **world** matrices (Task 4 + 6), the renderer concats `inv(parentWorld) * nodeWorld` at each step so nested groups don't double-apply ancestor transforms
+- [x] correctly map colors (Pixi accepts `'#ff0000'` → convert to CanvasKit `Color4f` or uint32) — `colorToFloat4(rgb, alpha)` returns the canonical `Float32Array` of unpremultiplied floats; alpha is taken straight from the `DrawCommand` (already pre-multiplied by ancestor `alpha` in the walker)
+- [x] correctly map fill vs. stroke to `Paint.Style`
+- [x] for ellipses, use `path.addOval()` — built via `PathBuilder` (the typings only expose mutation methods there, `Path` itself is immutable) and a bounding rect derived from `cx ± rx, cy ± ry`
+- [x] method `renderContainer(canvas, container)`: helper that invokes walker + render
+- [x] write tests `tests/skia/renderer.test.ts` with a CanvasKit mock (spy on `save`/`restore`/`concat`/`drawPath`/`drawImage`):
   - assert the `save → concat → ... → restore` sequence for each node
   - for drawRect, `drawPath` is called with a rectangular path and a fill paint
   - for a line, `drawPath` is called with a stroke paint and correct line width
   - group nesting (correct order of save/restore)
-- [ ] run tests
+  - additionally covered: matrix conversion helpers (`pixiMatrixToSkia`, `invertMatrix2D`, `colorToFloat4`), nested groups correctly resolve to LOCAL matrices, `addCircle`/`close` paths, combined fill+stroke draws the same path twice (fill first then stroke), multi-shape Graphics use a fresh `PathBuilder` per shape, sprite drawing via the injected `imageProvider` and graceful no-op when it returns `null` or is omitted, alpha multiplication propagates into the `Paint` color
+- [x] run tests
 
 ### Task 8: PDF export via the Skia PDF backend
 
