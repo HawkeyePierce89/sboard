@@ -97,10 +97,10 @@ A TypeScript web application that:
 
 ### Task 3: Thin TS wrapper around CanvasKit (initSkia, types)
 
-- [ ] create `src/skia/canvaskit-loader.ts`: `initCanvasKit(): Promise<CanvasKit>` that dynamically loads `canvaskit.js` from `/canvaskit/`, supplies `locateFile` for the `.wasm`, and caches the promise
-- [ ] create `src/skia/types.ts` with local TS types for the subset of CanvasKit we use (`Canvas`, `Surface`, `Paint`, `Path`, `Image`, `PDFDocument`) — because `@types/canvaskit-wasm` is incomplete for the PDF API
-- [ ] write tests `tests/skia/canvaskit-loader.test.ts` mocking `import('/canvaskit/canvaskit.js')` — verify singleton behavior and error handling on load failure
-- [ ] run tests
+- [x] create `src/skia/canvaskit-loader.ts`: `initCanvasKit(): Promise<CanvasKit>` that dynamically loads `canvaskit.js` from `/canvaskit/`, supplies `locateFile` for the `.wasm`, and caches the promise — accepts an optional `basePath` + injectable `loadModule` for tests, clears the cache on failure so a retry can succeed
+- [x] create `src/skia/types.ts` with local TS types for the subset of CanvasKit we use (`Canvas`, `Surface`, `Paint`, `Path`, `Image`, `PDFDocument`) — because `@types/canvaskit-wasm` is incomplete for the PDF API; re-exports the standard types and adds `PDFMetadata`, `PDFDocument`, `CanvasKitWithPDF`
+- [x] write tests `tests/skia/canvaskit-loader.test.ts` mocking `import('/canvaskit/canvaskit.js')` — verify singleton behavior and error handling on load failure (8 specs: resolve, locateFile defaults, custom basePath, caching, concurrent callers share one load, retry-after-failure, init-throws, missing default export)
+- [x] run tests
 
 ### Task 4: World transform extraction from PIXI.DisplayObject
 
