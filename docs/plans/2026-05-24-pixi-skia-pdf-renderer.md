@@ -259,15 +259,15 @@ A TypeScript web application that:
 
 ### Task 16: README with run instructions
 
-- [ ] update `README.md`:
+- [x] update `README.md`:
   - brief task description and stack
   - prerequisites (Node 20+, Docker — only for rebuilding CanvasKit; without Docker the project runs against the committed artifacts)
   - commands: `npm install`, `npm run dev`, `npm run build`, `npm run preview`, `npm test`, `npm run build:canvaskit`
   - project structure
   - architectural notes (how the wrapper works, how hit-testing works, how PDF export works)
-  - link to the deployed GitHub Pages site
-  - known limitations (if CanvasKit was not rebuilt locally — call out which build is bundled)
-- [ ] no unit tests required for this task
+  - link to the deployed GitHub Pages site (https://hawkeyepierce89.github.io/sboard/ — derived from the `HawkeyePierce89/sboard` repo + the `VITE_BASE=/sboard/` in `.github/workflows/deploy.yml`)
+  - known limitations (if CanvasKit was not rebuilt locally — call out which build is bundled) — README's "Known limitations" section explicitly flags the bundled stock `canvaskit-wasm@0.41.1` build, the resulting `PDFExportNotSupportedError`, and the `npm run build:canvaskit` upgrade path (Plan B from Task 2)
+- [x] no unit tests required for this task
 
 ### Task 17: Final verification of acceptance criteria
 
