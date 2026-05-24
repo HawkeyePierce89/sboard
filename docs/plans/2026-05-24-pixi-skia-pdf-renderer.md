@@ -131,15 +131,16 @@ A TypeScript web application that:
 
 ### Task 6: Walk PIXI.Container and build a SkiaSceneNode tree
 
-- [ ] create `src/pixi/scene-walker.ts` with a `SkiaSceneNode` union: `{type:'graphics', matrix, commands, source}`, `{type:'sprite', matrix, texture, width, height, source}`, `{type:'group', matrix, children, source}`, where `source` references the original `PIXI.DisplayObject` (used for hit-testing and event dispatch)
-- [ ] write `walkContainer(root: PIXI.Container): SkiaSceneNode` — recursively walk the tree, fold world matrices, parse Graphics commands, and for sprites extract `baseTexture.resource` (image source)
-- [ ] handle `visible=false` (skip) and `alpha` (propagate into commands)
-- [ ] write tests `tests/pixi/scene-walker.test.ts`:
+- [x] create `src/pixi/scene-walker.ts` with a `SkiaSceneNode` union: `{type:'graphics', matrix, commands, source}`, `{type:'sprite', matrix, texture, width, height, source}`, `{type:'group', matrix, children, source}`, where `source` references the original `PIXI.DisplayObject` (used for hit-testing and event dispatch)
+- [x] write `walkContainer(root: PIXI.Container): SkiaSceneNode` — recursively walk the tree, fold world matrices, parse Graphics commands, and for sprites extract `baseTexture.resource` (image source) — sprite node exposes the full `Texture` (renderer reads `texture.baseTexture.resource` at render time); root always becomes the top-level `group` node so the tree mirrors the PIXI hierarchy 1:1
+- [x] handle `visible=false` (skip) and `alpha` (propagate into commands) — accumulated `worldAlpha` from the root chain is multiplied into every `fill`/`stroke` command's alpha
+- [x] write tests `tests/pixi/scene-walker.test.ts`:
   - single Graphics — flat node
   - nested subContainer (as in the spec example) — correct tree with a group node
   - matrices inherit along the chain
   - invisible nodes are excluded
-- [ ] run tests
+  - additionally covered: sprite node extraction (texture/width/height/source + scaled matrix), child ordering preservation, invisible subtree pruning, degenerate-group when root is invisible, alpha multiplication for both fill and stroke (and non-style commands left alone)
+- [x] run tests
 
 ### Task 7: PixiToSkiaRenderer — render the CommandList into a CanvasKit Canvas
 
