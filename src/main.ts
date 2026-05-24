@@ -1,7 +1,14 @@
 import { App, createApp } from './app';
 import { buildInitialScene } from './pixi/initial-scene';
+import { attachSpecInteractions } from './pixi/scene-builder';
 import { initCanvasKit } from './skia/canvaskit-loader';
-import { configureCanvasForDPR, getCanvasById } from './ui/dom';
+import {
+  DomLookupError,
+  configureCanvasForDPR,
+  getCanvasById,
+  getElementById,
+} from './ui/dom';
+import { createStatusReporter, type StatusReporter } from './ui/status';
 
 export const APP_NAME = 'sboard';
 
@@ -27,15 +34,32 @@ export async function start(): Promise<App> {
   configureCanvasForDPR(pixiCanvas, CANVAS_WIDTH, CANVAS_HEIGHT);
   configureCanvasForDPR(skiaCanvas, CANVAS_WIDTH, CANVAS_HEIGHT);
 
+  const status = resolveStatusReporter();
+
   const canvasKit = await initCanvasKit();
+  const scene = buildInitialScene();
+  attachSpecInteractions(scene, {
+    onEvent: status ? (event) => status.report(event) : undefined,
+  });
+
   return createApp({
     pixiCanvas,
     skiaCanvas,
     canvasKit,
     width: CANVAS_WIDTH,
     height: CANVAS_HEIGHT,
-    initialScene: buildInitialScene(),
+    initialScene: scene,
   });
+}
+
+function resolveStatusReporter(): StatusReporter | undefined {
+  try {
+    const el = getElementById('status-log', HTMLElement);
+    return createStatusReporter(el);
+  } catch (err) {
+    if (err instanceof DomLookupError) return undefined;
+    throw err;
+  }
 }
 
 // Auto-run in the browser only when the expected canvases are present.

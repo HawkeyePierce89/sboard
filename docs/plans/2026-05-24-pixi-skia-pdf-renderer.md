@@ -197,11 +197,11 @@ A TypeScript web application that:
 
 ### Task 11: pointerdown/pointerup on the Pixi canvas
 
-- [ ] in `src/pixi/scene-builder.ts` (or in scene init) set `eventMode = 'static'` (Pixi 7 API) on interactive objects and attach `pointerdown`/`pointerup` handlers exactly like the spec example
-- [ ] hook up the test console logs (`g1 pointerdown!`, `g2 pointerup!`) — matching the spec verbatim
-- [ ] add a status block in the UI showing the last event (object id + event type)
-- [ ] write `tests/pixi/events.test.ts` (jsdom + mocked Pixi events): handler fires on a synthetic event and updates the status
-- [ ] run tests
+- [x] in `src/pixi/scene-builder.ts` (or in scene init) set `eventMode = 'static'` (Pixi 7 API) on interactive objects and attach `pointerdown`/`pointerup` handlers exactly like the spec example — `attachSpecInteractions(root, { onEvent, logger? })` flips `eventMode = 'static'` on the spec-named objects and binds the handlers; `makeInteractive(target, events, options)` is exposed for Task 12/13 to wire newly added shapes (e.g. random-shape) with the same contract
+- [x] hook up the test console logs (`g1 pointerdown!`, `g2 pointerup!`) — matching the spec verbatim — only `g1` listens for `pointerdown` and only `g2` listens for `pointerup` per the spec; the cross-events (g1 pointerup, g2 pointerdown) are explicitly asserted to be no-ops; default logger falls through to `console.log`
+- [x] add a status block in the UI showing the last event (object id + event type) — reused the existing `#status-log` element from Task 9; `src/ui/status.ts` exposes `createStatusReporter(el)` returning `{ report, reset }`. `start()` in `main.ts` looks up `#status-log` (gracefully `undefined` when missing so unit tests that omit it don't crash) and threads the reporter through `attachSpecInteractions` as `onEvent`
+- [x] write `tests/pixi/events.test.ts` (jsdom + mocked Pixi events): handler fires on a synthetic event and updates the status — 18 specs covering: `eventMode` flip on g1/g2, g3/g4 untouched (so Task 12 owns hit-test wiring), exact `"g1 pointerdown!"` / `"g2 pointerup!"` console strings, the no-op cross-events, onEvent payload shape, end-to-end DOM status updates through `createStatusReporter`, missing-target safety (`attachSpecInteractions` on an empty Container does not throw), default `console.log` logger, `makeInteractive` with arbitrary event lists and `<unnamed>` fallback, `findDescendantByName` recursion into nested containers, and `formatStatus`/`reset` behavior
+- [x] run tests — 141 total pass (was 123 before this task); `npm run typecheck` and `npm run lint` clean
 
 ### Task 12: Hit-testing and events on the Skia canvas
 
