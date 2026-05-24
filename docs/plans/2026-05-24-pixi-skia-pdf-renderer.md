@@ -56,17 +56,17 @@ A TypeScript web application that:
 
 ### Task 1: Project scaffold (Vite + TS + Vitest + ESLint/Prettier)
 
-- [ ] initialize `package.json` via `npm init -y`, add scripts (`dev`, `build`, `preview`, `test`, `lint`, `typecheck`)
-- [ ] install dev dependencies: `vite`, `typescript`, `vitest`, `@vitest/coverage-v8`, `jsdom`, `eslint`, `@typescript-eslint/parser`, `@typescript-eslint/eslint-plugin`, `prettier`
-- [ ] install runtime dependencies: `pixi.js@7.2.4-legacy`, `canvaskit-wasm` (as a placeholder — will be replaced by our own build)
-- [ ] create `tsconfig.json` (strict, target ES2020, module ESNext, moduleResolution bundler, lib DOM)
-- [ ] create `vite.config.ts` (`base` from env, `assetsInclude: ['**/*.wasm']`, correct copy step for `.wasm`)
-- [ ] create `vitest.config.ts` (jsdom environment for DOM-dependent tests, separate node environment for pure logic)
-- [ ] create `.eslintrc.cjs` and `.prettierrc` with sensible defaults
-- [ ] create the directory tree: `src/`, `src/pixi/`, `src/skia/`, `src/ui/`, `src/utils/`, `tests/`, `public/`, `scripts/`, `docker/`
-- [ ] add a minimal `src/main.ts` and `index.html` (stubs)
-- [ ] write a smoke test `tests/smoke.test.ts` that imports the entry point and asserts the module loads
-- [ ] run `npm test`, `npm run typecheck`, `npm run lint` — all green
+- [x] initialize `package.json` via `npm init -y`, add scripts (`dev`, `build`, `preview`, `test`, `lint`, `typecheck`)
+- [x] install dev dependencies: `vite`, `typescript`, `vitest`, `@vitest/coverage-v8`, `jsdom`, `eslint`, `@typescript-eslint/parser`, `@typescript-eslint/eslint-plugin`, `prettier`
+- [x] install runtime dependencies: `pixi.js@7.2.4-legacy`, `canvaskit-wasm` (as a placeholder — will be replaced by our own build) — installed `pixi.js@7.2.4` + `pixi.js-legacy@7.2.4` (legacy package provides Canvas renderer for `forceCanvas`) and `canvaskit-wasm@0.41.1`
+- [x] create `tsconfig.json` (strict, target ES2020, module ESNext, moduleResolution bundler, lib DOM)
+- [x] create `vite.config.ts` (`base` from env, `assetsInclude: ['**/*.wasm']`, correct copy step for `.wasm`)
+- [x] create `vitest.config.ts` (jsdom environment for DOM-dependent tests, separate node environment for pure logic)
+- [x] create `.eslintrc.cjs` and `.prettierrc` with sensible defaults — ESLint v10 requires flat config; created `eslint.config.js` instead of `.eslintrc.cjs`
+- [x] create the directory tree: `src/`, `src/pixi/`, `src/skia/`, `src/ui/`, `src/utils/`, `tests/`, `public/`, `scripts/`, `docker/`
+- [x] add a minimal `src/main.ts` and `index.html` (stubs)
+- [x] write a smoke test `tests/smoke.test.ts` that imports the entry point and asserts the module loads
+- [x] run `npm test`, `npm run typecheck`, `npm run lint` — all green
 
 ### Task 2: Build CanvasKit WASM with PDF backend (via Docker)
 
