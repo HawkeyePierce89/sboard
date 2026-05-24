@@ -225,17 +225,18 @@ A TypeScript web application that:
 
 ### Task 13: "Generate random shape" button
 
-- [ ] create `src/ui/random-shape.ts` with `addRandomShape(container: PIXI.Container, bounds: {w,h}): PIXI.Graphics`
+- [x] create `src/ui/random-shape.ts` with `addRandomShape(container: PIXI.Container, bounds: {w,h}): PIXI.Graphics`
   - randomly choose a shape type (rect, ellipse, line, polygon)
   - random position, angle, scale, fill/stroke color
-  - return the inserted object
-- [ ] wire the button in the UI; after insertion, call `app.redrawSkia()`
-- [ ] attach `pointerdown`/`pointerup` to the new shape (same behavior)
-- [ ] write `tests/ui/random-shape.test.ts`:
-  - the function mutates the container (`children.length` grows)
-  - the returned object is a `PIXI.Graphics` with non-empty commands
-  - determinism with `Math.random` mocked
-- [ ] run tests
+  - return the inserted object — `AddRandomShapeOptions` exposes an injectable `random` source (defaults to `Math.random`) and an optional `name` override; default name is `random:<type>`; shapes drawn around (0,0) so the local matrix (position/rotation/scale) behaves intuitively
+- [x] wire the button in the UI; after insertion, call `app.redrawSkia()` — added `wireGenerateButton(app, status)` in `src/main.ts` which gracefully no-ops (via `DomLookupError`) when `#btn-generate` is absent, so the smoke test continues to import the module cleanly
+- [x] attach `pointerdown`/`pointerup` to the new shape (same behavior) — reuses `makeInteractive` from `src/pixi/scene-builder.ts`, so the generated shape's events flow through the same status reporter / console-logger chain as the spec `g1`/`g2` objects
+- [x] write `tests/ui/random-shape.test.ts`:
+  - the function mutates the container (`children.length` grows) — covered
+  - the returned object is a `PIXI.Graphics` with non-empty commands — covered
+  - determinism with `Math.random` mocked — covered (via `vi.spyOn(Math, 'random')`)
+  - additionally covered: each of the four shape types (rect/ellipse/line/polygon) is produced by the matching type-selector seed, polygon emits a closed (`closePath`-terminated) path with ≥3 vertices, position scales with the bounds argument, scale stays in [0.5, 1.5], rotation lands in [0, 2π), explicit `name` override wins over the `random:<type>` default, zero-sized bounds do not throw, and the type table is exactly `[rect, ellipse, line, polygon]` in that order. Documented why `LINE_SEED=0.5` was abandoned (PIXI dedupes `lineTo(0,0)` so the polygon never commits a stroke style).
+- [x] run tests — 181 total pass (was 168 before this task: 13 new random-shape specs); `npm run typecheck` and `npm run lint` clean
 
 ### Task 14: "Export to PDF" button in the UI
 

@@ -1,13 +1,15 @@
 import { App, createApp } from './app';
 import { buildInitialScene } from './pixi/initial-scene';
-import { attachSpecInteractions } from './pixi/scene-builder';
+import { attachSpecInteractions, makeInteractive } from './pixi/scene-builder';
 import { initCanvasKit } from './skia/canvaskit-loader';
 import {
   DomLookupError,
   configureCanvasForDPR,
+  getButtonById,
   getCanvasById,
   getElementById,
 } from './ui/dom';
+import { addRandomShape } from './ui/random-shape';
 import { createStatusReporter, type StatusReporter } from './ui/status';
 
 export const APP_NAME = 'sboard';
@@ -42,7 +44,7 @@ export async function start(): Promise<App> {
     onEvent: status ? (event) => status.report(event) : undefined,
   });
 
-  return createApp({
+  const app = createApp({
     pixiCanvas,
     skiaCanvas,
     canvasKit,
@@ -52,6 +54,33 @@ export async function start(): Promise<App> {
     // `attachSpecInteractions` above wires the spec handlers via
     // `target.on(...)`, so a synthetic event emitted by the Skia-side
     // hit-test fires exactly the same callbacks as the Pixi-side one.
+  });
+
+  wireGenerateButton(app, status);
+
+  return app;
+}
+
+function wireGenerateButton(
+  app: App,
+  status: StatusReporter | undefined,
+): void {
+  let button: HTMLButtonElement;
+  try {
+    button = getButtonById('btn-generate');
+  } catch (err) {
+    if (err instanceof DomLookupError) return;
+    throw err;
+  }
+  button.addEventListener('click', () => {
+    const shape = addRandomShape(app.currentScene, {
+      w: CANVAS_WIDTH,
+      h: CANVAS_HEIGHT,
+    });
+    makeInteractive(shape, ['pointerdown', 'pointerup'], {
+      onEvent: status ? (event) => status.report(event) : undefined,
+    });
+    app.redrawSkia();
   });
 }
 
