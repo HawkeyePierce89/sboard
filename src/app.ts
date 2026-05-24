@@ -4,12 +4,17 @@ import type { CanvasKit } from 'canvaskit-wasm';
 // `forceCanvas: true`. The base `pixi.js` package alone throws
 // "Unable to auto-detect a suitable renderer" in that mode.
 import { Application, Container } from 'pixi.js-legacy';
+import type { DisplayObject } from 'pixi.js';
+import { walkContainer } from './pixi/scene-walker';
+import { hitTest } from './skia/hit-test';
 import {
   PixiToSkiaRenderer,
   colorToFloat4,
   type ImageProvider,
 } from './skia/renderer';
 import type { Canvas, Surface } from './skia/types';
+
+export type SkiaPointerEventKind = 'pointerdown' | 'pointerup';
 
 export interface AppOptions {
   pixiApp: Application;
@@ -24,6 +29,14 @@ export interface AppOptions {
    * agree. Defaults to white (0xffffff).
    */
   backgroundColor?: number;
+  /**
+   * Optional DOM canvas to attach mouse listeners on. When provided,
+   * `mousedown` / `mouseup` events trigger a hit-test against the
+   * current scene and emit synthetic `pointerdown` / `pointerup` events
+   * on the matched `DisplayObject` — mirroring the Pixi canvas wiring
+   * so the same handlers fire whichever canvas the user clicks on.
+   */
+  skiaCanvas?: HTMLCanvasElement;
 }
 
 /**
@@ -42,6 +55,7 @@ export class App {
   readonly canvasKit: CanvasKit;
   readonly skiaSurface: Surface;
   readonly renderer: PixiToSkiaRenderer;
+  readonly skiaCanvas: HTMLCanvasElement | undefined;
   currentScene: Container;
   private readonly clearColor: Float32Array;
 
@@ -52,9 +66,14 @@ export class App {
     this.renderer = opts.renderer;
     this.currentScene = opts.initialScene;
     this.clearColor = colorToFloat4(opts.backgroundColor ?? 0xffffff, 1);
+    this.skiaCanvas = opts.skiaCanvas;
 
     this.pixiApp.stage.addChild(opts.initialScene);
     this.redrawSkia();
+
+    if (this.skiaCanvas) {
+      this.attachSkiaPointerListeners(this.skiaCanvas);
+    }
   }
 
   setScene(container: Container): void {
@@ -70,6 +89,68 @@ export class App {
     this.renderer.renderContainer(canvas, this.currentScene);
     this.skiaSurface.flush();
   }
+
+  /**
+   * Hit-test `(x, y)` against the current scene (coordinates in scene
+   * space — i.e. CSS pixels relative to the canvas) and, if a leaf is
+   * found, emit a synthetic Pixi event of the given kind on it. The
+   * matched `DisplayObject` (or `null`) is returned so the caller can
+   * update UI state.
+   *
+   * Re-walks the scene on every event rather than caching a tree — the
+   * `SkiaSceneNode` builder is cheap, and avoiding a cache means the
+   * hit-test sees current world matrices even when the user mutates
+   * the scene between events (e.g. drag-to-move in a future task).
+   */
+  dispatchSkiaPointerEvent(
+    kind: SkiaPointerEventKind,
+    x: number,
+    y: number,
+  ): DisplayObject | null {
+    const tree = walkContainer(this.currentScene);
+    const hit = hitTest(tree, x, y);
+    if (hit) {
+      // The spec handlers (`g1 pointerdown!` / `g2 pointerup!`) ignore
+      // the event payload, and Pixi's `emit` is typed for a real
+      // `FederatedPointerEvent`. Cast to `never` to bypass the
+      // mismatch — tests do the same when synthesising events.
+      hit.emit(kind, makeSyntheticPointerEvent(kind, x, y) as never);
+    }
+    return hit;
+  }
+
+  private attachSkiaPointerListeners(canvas: HTMLCanvasElement): void {
+    canvas.addEventListener('mousedown', (event) => {
+      const { x, y } = canvasEventToScene(event, canvas);
+      this.dispatchSkiaPointerEvent('pointerdown', x, y);
+    });
+    canvas.addEventListener('mouseup', (event) => {
+      const { x, y } = canvasEventToScene(event, canvas);
+      this.dispatchSkiaPointerEvent('pointerup', x, y);
+    });
+  }
+}
+
+/**
+ * Translate a DOM `MouseEvent` into scene-space coordinates relative to
+ * the canvas. Uses `getBoundingClientRect()` rather than `offsetX/Y` so
+ * the math is independent of `devicePixelRatio` — the scene operates in
+ * CSS pixels.
+ */
+export function canvasEventToScene(
+  event: MouseEvent,
+  canvas: HTMLCanvasElement,
+): { x: number; y: number } {
+  const rect = canvas.getBoundingClientRect();
+  return { x: event.clientX - rect.left, y: event.clientY - rect.top };
+}
+
+function makeSyntheticPointerEvent(
+  kind: SkiaPointerEventKind,
+  x: number,
+  y: number,
+): { type: SkiaPointerEventKind; global: { x: number; y: number } } {
+  return { type: kind, global: { x, y } };
 }
 
 export interface CreateAppOptions {
@@ -110,5 +191,6 @@ export function createApp(opts: CreateAppOptions): App {
     renderer,
     initialScene: opts.initialScene,
     backgroundColor,
+    skiaCanvas: opts.skiaCanvas,
   });
 }

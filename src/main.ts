@@ -49,6 +49,9 @@ export async function start(): Promise<App> {
     width: CANVAS_WIDTH,
     height: CANVAS_HEIGHT,
     initialScene: scene,
+    // `attachSpecInteractions` above wires the spec handlers via
+    // `target.on(...)`, so a synthetic event emitted by the Skia-side
+    // hit-test fires exactly the same callbacks as the Pixi-side one.
   });
 }
 

@@ -205,21 +205,23 @@ A TypeScript web application that:
 
 ### Task 12: Hit-testing and events on the Skia canvas
 
-- [ ] create `src/skia/hit-test.ts` with `hitTest(node: SkiaSceneNode, x: number, y: number): PIXI.DisplayObject | null`:
-  - walk in reverse order (top-most first)
-  - apply the inverse matrix to the point
-  - test the bounding box for each command (rectangles, ellipses, polylines with line-width awareness)
+- [x] create `src/skia/hit-test.ts` with `hitTest(node: SkiaSceneNode, x: number, y: number): PIXI.DisplayObject | null`:
+  - walk in reverse order (top-most first) — children iterated `[N-1 → 0]` so the last-rendered sibling wins
+  - apply the inverse matrix to the point — `inv(node.matrix)` is applied once per leaf because the walker stores **world** matrices on every node; group nodes have no geometry of their own and just forward the test to their children
+  - test the bounding box for each command (rectangles, ellipses, polylines with line-width awareness) — rect/ellipse/circle inflated by `strokeWidth/2` when stroke-only, polylines via point-to-segment distance, closed polygons via even-odd point-in-polygon for the fill case; sprites use the **texture** dimensions in local space (not the post-scale `sprite.width/height` exposed on the node)
   - return the `source` of the top hit `DisplayObject`
-- [ ] in `App`, attach `mousedown`/`mouseup` on the Skia canvas, translate coordinates into container space, and call `hitTest`
-- [ ] dispatch a synthetic Pixi event to the matched `DisplayObject` (`source.emit('pointerdown', fakeEvent)`) — the same handler used by the Pixi canvas should fire
-- [ ] update the UI status block
-- [ ] write tests `tests/skia/hit-test.test.ts`:
-  - hit inside a rectangle
-  - miss right next to a rectangle
-  - hit inside a rotated rectangle
-  - top node wins when overlapping
-  - hit through a nested container's transform
-- [ ] run tests
+- [x] in `App`, attach `mousedown`/`mouseup` on the Skia canvas, translate coordinates into container space, and call `hitTest` — `skiaCanvas?` added to `AppOptions` (kept optional so existing tests stay valid). `canvasEventToScene` uses `getBoundingClientRect` rather than `offsetX/Y` so the math is DPR-independent. Dispatch is also exposed as a public `dispatchSkiaPointerEvent(kind, x, y)` so unit tests (and a future "Generate random shape" button) can fire events without going through the DOM.
+- [x] dispatch a synthetic Pixi event to the matched `DisplayObject` (`source.emit('pointerdown', fakeEvent)`) — the same handler used by the Pixi canvas should fire — synthetic event shape is `{type, global: {x, y}}`; cast to `never` at the `emit` site to bypass `FederatedPointerEvent`'s 70+ unused fields (same approach existing event tests already use). Because `attachSpecInteractions` (Task 11) wires the spec handlers via `target.on(...)`, the synthetic event triggers `g1 pointerdown!` / `g2 pointerup!` exactly like a real Pixi-canvas click.
+- [x] update the UI status block — automatically updated via the existing `onEvent` → `createStatusReporter` chain set up in Task 11; no extra wiring needed because the handlers are attached to the `DisplayObject`, not to the DOM canvas
+- [x] write tests `tests/skia/hit-test.test.ts`:
+  - hit inside a rectangle — covered
+  - miss right next to a rectangle — covered (3 boundary-adjacent points)
+  - hit inside a rotated rectangle — covered (45° rotation around origin, both centre and an axis tip)
+  - top node wins when overlapping — covered (two overlapping rects, plus bottom-only and top-only sample points)
+  - hit through a nested container's transform — covered (spec g3 line in a (75,50)-translated sub-container)
+  - additionally covered: just-outside rect misses, world-matrix translation on the leaf, alpha=0 fill produces no hit, stroke-only rect (hits on the edge but not the centre), filled ellipse + circle, stroke-width-aware polyline hit, point-in-polygon for closed filled polygon, sprite hit using texture-local bounds, invisible subtree pruning, empty-scene `null` result. 16 specs total.
+- [x] add `tests/app.test.ts` coverage for the new wiring: `dispatchSkiaPointerEvent` happy-path (pointerdown + pointerup), miss path, spec subContainer hit, re-walks per call so post-construction mutations are seen, works without a `skiaCanvas`; DOM listeners attach when canvas is provided, `getBoundingClientRect` offset is subtracted before hit-testing, `canvasEventToScene` math sanity. 11 new app specs (total 25, up from 14).
+- [x] run tests — 168 total pass (was 141 before this task: 16 hit-test + 11 app specs added); `npm run typecheck` and `npm run lint` clean
 
 ### Task 13: "Generate random shape" button
 

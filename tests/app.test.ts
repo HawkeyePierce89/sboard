@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Application, Container, Graphics } from 'pixi.js-legacy';
 import type { CanvasKit } from 'canvaskit-wasm';
-import { App, createApp } from '../src/app';
+import { App, canvasEventToScene, createApp } from '../src/app';
 import { PixiToSkiaRenderer } from '../src/skia/renderer';
 import type { Surface } from '../src/skia/types';
 
@@ -59,6 +59,7 @@ function buildApp(
     renderer?: MockRenderer;
     initialScene?: Container;
     backgroundColor?: number;
+    skiaCanvas?: HTMLCanvasElement;
   } = {},
 ): {
   app: App;
@@ -78,6 +79,7 @@ function buildApp(
     renderer: renderer as unknown as PixiToSkiaRenderer,
     initialScene,
     backgroundColor: overrides.backgroundColor,
+    skiaCanvas: overrides.skiaCanvas,
   });
   return { app, pixiApp, skiaSurface, renderer, initialScene };
 }
@@ -288,5 +290,207 @@ describe('createApp', () => {
 
     // Cleanup so subsequent tests don't share PIXI globals.
     app.pixiApp.destroy(false);
+  });
+});
+
+describe('App.dispatchSkiaPointerEvent', () => {
+  function sceneWithRect(name: string, x: number, y: number, w: number, h: number): {
+    scene: Container;
+    target: Graphics;
+  } {
+    const scene = new Container();
+    const target = new Graphics();
+    target.name = name;
+    target.beginFill(0xff0000, 1).drawRect(x, y, w, h).endFill();
+    scene.addChild(target);
+    return { scene, target };
+  }
+
+  it('emits a pointerdown on the hit DisplayObject and returns it', () => {
+    const { scene, target } = sceneWithRect('g-hit', 10, 10, 100, 100);
+    const { app } = buildApp({ initialScene: scene });
+    const listener = vi.fn();
+    target.on('pointerdown', listener);
+
+    const result = app.dispatchSkiaPointerEvent('pointerdown', 50, 50);
+
+    expect(result).toBe(target);
+    expect(listener).toHaveBeenCalledTimes(1);
+    const event = listener.mock.calls[0][0];
+    expect(event).toMatchObject({ type: 'pointerdown', global: { x: 50, y: 50 } });
+  });
+
+  it('emits a pointerup on the hit DisplayObject (different kind)', () => {
+    const { scene, target } = sceneWithRect('g-up', 0, 0, 80, 80);
+    const { app } = buildApp({ initialScene: scene });
+    const listener = vi.fn();
+    target.on('pointerup', listener);
+
+    const result = app.dispatchSkiaPointerEvent('pointerup', 40, 40);
+
+    expect(result).toBe(target);
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(listener.mock.calls[0][0]).toMatchObject({ type: 'pointerup' });
+  });
+
+  it('returns null and emits nothing when the point misses every shape', () => {
+    const { scene, target } = sceneWithRect('g-miss', 10, 10, 50, 50);
+    const { app } = buildApp({ initialScene: scene });
+    const listener = vi.fn();
+    target.on('pointerdown', listener);
+
+    const result = app.dispatchSkiaPointerEvent('pointerdown', 500, 500);
+
+    expect(result).toBeNull();
+    expect(listener).not.toHaveBeenCalled();
+  });
+
+  it('honours the spec example: a click in the subContainer hits g3 / g4', () => {
+    const scene = new Container();
+    const sub = new Container();
+    sub.position.set(75, 50);
+    const g3 = new Graphics();
+    g3.name = 'g3';
+    g3.lineStyle(10, 0xffffff, 1).moveTo(0, 0).lineTo(150, 100);
+    sub.addChild(g3);
+    scene.addChild(sub);
+    const { app } = buildApp({ initialScene: scene });
+
+    const downListener = vi.fn();
+    g3.on('pointerdown', downListener);
+
+    // World midpoint of g3's segment = (75 + 75, 50 + 50) = (150, 100).
+    const result = app.dispatchSkiaPointerEvent('pointerdown', 150, 100);
+
+    expect(result).toBe(g3);
+    expect(downListener).toHaveBeenCalledTimes(1);
+  });
+
+  it('re-walks the scene per event so changes after construction are seen', () => {
+    const scene = new Container();
+    const { app } = buildApp({ initialScene: scene });
+
+    // No children yet — nothing to hit.
+    expect(app.dispatchSkiaPointerEvent('pointerdown', 50, 50)).toBeNull();
+
+    // Add a graphics after the App is built.
+    const g = new Graphics();
+    g.beginFill(0x00ff00, 1).drawRect(0, 0, 100, 100).endFill();
+    scene.addChild(g);
+    const listener = vi.fn();
+    g.on('pointerdown', listener);
+
+    const result = app.dispatchSkiaPointerEvent('pointerdown', 50, 50);
+    expect(result).toBe(g);
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not require a skiaCanvas — programmatic dispatch works without DOM wiring', () => {
+    const { scene, target } = sceneWithRect('g-no-dom', 0, 0, 10, 10);
+    const { app } = buildApp({ initialScene: scene });
+    // No `skiaCanvas` was supplied, so no listeners were attached, but
+    // the public dispatch method must still work.
+    const listener = vi.fn();
+    target.on('pointerdown', listener);
+
+    expect(app.dispatchSkiaPointerEvent('pointerdown', 5, 5)).toBe(target);
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('App — DOM listeners on the Skia canvas', () => {
+  function makeCanvasAt(x: number, y: number, w: number, h: number): HTMLCanvasElement {
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    canvas.style.width = `${w}px`;
+    canvas.style.height = `${h}px`;
+    // jsdom returns zero-rects by default; stub so canvasEventToScene
+    // produces stable coords.
+    canvas.getBoundingClientRect = () =>
+      ({ left: x, top: y, right: x + w, bottom: y + h, width: w, height: h, x, y, toJSON: () => ({}) } as DOMRect);
+    return canvas;
+  }
+
+  it('attaches mousedown/mouseup listeners when skiaCanvas is provided', () => {
+    const canvas = makeCanvasAt(0, 0, 500, 400);
+    const spy = vi.spyOn(canvas, 'addEventListener');
+
+    buildApp({ skiaCanvas: canvas });
+
+    const kinds = spy.mock.calls.map((c) => c[0]);
+    expect(kinds).toContain('mousedown');
+    expect(kinds).toContain('mouseup');
+  });
+
+  it('does NOT attach listeners when skiaCanvas is omitted', () => {
+    // We can't easily spy on a non-existent canvas, but we can assert
+    // the public surface stays clean: constructing without a canvas
+    // must not throw and the field must be undefined.
+    const { app } = buildApp();
+    expect(app.skiaCanvas).toBeUndefined();
+  });
+
+  it('dispatches pointerdown on the hit object when the user clicks the Skia canvas', () => {
+    const canvas = makeCanvasAt(0, 0, 500, 400);
+    const scene = new Container();
+    const target = new Graphics();
+    target.beginFill(0xff0000, 1).drawRect(50, 50, 100, 100).endFill();
+    scene.addChild(target);
+    const listener = vi.fn();
+    target.on('pointerdown', listener);
+
+    buildApp({ initialScene: scene, skiaCanvas: canvas });
+
+    const event = new MouseEvent('mousedown', {
+      bubbles: true,
+      clientX: 75,
+      clientY: 75,
+    });
+    canvas.dispatchEvent(event);
+
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
+
+  it('subtracts the canvas getBoundingClientRect offset before hit-testing', () => {
+    const canvas = makeCanvasAt(200, 100, 500, 400);
+    const scene = new Container();
+    const target = new Graphics();
+    target.beginFill(0xff0000, 1).drawRect(0, 0, 100, 100).endFill();
+    scene.addChild(target);
+    const listener = vi.fn();
+    target.on('pointerup', listener);
+
+    buildApp({ initialScene: scene, skiaCanvas: canvas });
+
+    // clientX=250, clientY=150 ⇒ canvas-local (50, 50), inside the rect.
+    canvas.dispatchEvent(new MouseEvent('mouseup', { clientX: 250, clientY: 150 }));
+    expect(listener).toHaveBeenCalledTimes(1);
+
+    // clientX=199 (just left of the canvas) ⇒ local (-1, 0), outside.
+    listener.mockClear();
+    canvas.dispatchEvent(new MouseEvent('mouseup', { clientX: 199, clientY: 150 }));
+    expect(listener).not.toHaveBeenCalled();
+  });
+});
+
+describe('canvasEventToScene', () => {
+  it('returns (clientX - rect.left, clientY - rect.top)', () => {
+    const canvas = document.createElement('canvas');
+    canvas.getBoundingClientRect = () =>
+      ({
+        left: 30,
+        top: 40,
+        right: 530,
+        bottom: 440,
+        width: 500,
+        height: 400,
+        x: 30,
+        y: 40,
+        toJSON: () => ({}),
+      }) as DOMRect;
+
+    const event = new MouseEvent('mousedown', { clientX: 80, clientY: 100 });
+    expect(canvasEventToScene(event, canvas)).toEqual({ x: 50, y: 60 });
   });
 });
