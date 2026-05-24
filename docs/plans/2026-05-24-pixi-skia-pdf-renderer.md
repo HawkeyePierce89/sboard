@@ -117,16 +117,17 @@ A TypeScript web application that:
 
 ### Task 5: Parse PIXI.Graphics into a neutral CommandList
 
-- [ ] create `src/pixi/graphics-commands.ts` with a `DrawCommand` union: `{type:'fill', color, alpha}`, `{type:'stroke', width, color, alpha}`, `{type:'moveTo', x, y}`, `{type:'lineTo', x, y}`, `{type:'rect', x, y, w, h}`, `{type:'ellipse', cx, cy, rx, ry}`, `{type:'circle', cx, cy, r}`, `{type:'closePath'}`
-- [ ] write `extractCommands(g: PIXI.Graphics): DrawCommand[]` reading `g.geometry.graphicsData` (internal `GraphicsData[]`) — for each entry, pull `fillStyle`, `lineStyle`, `shape` (`Rectangle`/`Ellipse`/`Circle`/`Polygon`)
-- [ ] handle `Polygon` (used internally by `moveTo`/`lineTo`) — decompose into `moveTo` + chain of `lineTo`
-- [ ] write tests `tests/pixi/graphics-commands.test.ts`:
+- [x] create `src/pixi/graphics-commands.ts` with a `DrawCommand` union: `{type:'fill', color, alpha}`, `{type:'stroke', width, color, alpha}`, `{type:'moveTo', x, y}`, `{type:'lineTo', x, y}`, `{type:'rect', x, y, w, h}`, `{type:'ellipse', cx, cy, rx, ry}`, `{type:'circle', cx, cy, r}`, `{type:'closePath'}`
+- [x] write `extractCommands(g: PIXI.Graphics): DrawCommand[]` reading `g.geometry.graphicsData` (internal `GraphicsData[]`) — for each entry, pull `fillStyle`, `lineStyle`, `shape` (`Rectangle`/`Ellipse`/`Circle`/`Polygon`); calls `g.finishPoly()` first so any pending `moveTo`/`lineTo` polygon (which is only committed at render time) is materialized into `graphicsData`
+- [x] handle `Polygon` (used internally by `moveTo`/`lineTo`) — decompose into `moveTo` + chain of `lineTo`; appends `closePath` when `Polygon.closeStroke === true` (e.g. `drawPolygon`)
+- [x] write tests `tests/pixi/graphics-commands.test.ts`:
   - `drawRect` → expect `[fill, rect]`
   - `drawEllipse` → expect `[fill, ellipse]`
   - `moveTo + lineTo` with `lineStyle` → expect `[stroke, moveTo, lineTo]`
   - the g3 scenario from the spec (`lineStyle(10, '#ffffff', 1).moveTo(0,0).lineTo(150,100)`)
   - combined fill + stroke within a single Graphics
-- [ ] run tests
+  - also covered: `drawCircle` mapping, multi-segment polylines, closed `drawPolygon`, multi-shape Graphics, empty Graphics, invisible fill (`alpha=0`), implicit polygon commit. Added `tests/setup.ts` stubbing `HTMLCanvasElement.getContext('2d')` because jsdom returns null, which `Texture.WHITE` (lazily built when `new Graphics()` runs) tries to write to.
+- [x] run tests
 
 ### Task 6: Walk PIXI.Container and build a SkiaSceneNode tree
 
