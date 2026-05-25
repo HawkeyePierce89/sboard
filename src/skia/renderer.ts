@@ -139,12 +139,18 @@ export class PixiToSkiaRenderer {
         switch (cmd.type) {
           case 'fill':
             flush();
-            if (fillPaint) fillPaint.delete();
+            if (fillPaint) {
+              fillPaint.delete();
+              fillPaint = null;
+            }
             fillPaint = this.makeFillPaint(cmd);
             break;
           case 'stroke':
             flush();
-            if (strokePaint) strokePaint.delete();
+            if (strokePaint) {
+              strokePaint.delete();
+              strokePaint = null;
+            }
             strokePaint = this.makeStrokePaint(cmd);
             break;
           case 'moveTo':
