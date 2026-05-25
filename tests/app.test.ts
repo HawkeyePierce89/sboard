@@ -11,7 +11,7 @@ interface MockSkiaCanvas {
   restore: ReturnType<typeof vi.fn>;
   concat: ReturnType<typeof vi.fn>;
   drawPath: ReturnType<typeof vi.fn>;
-  drawImage: ReturnType<typeof vi.fn>;
+  drawImageRect: ReturnType<typeof vi.fn>;
 }
 
 interface MockSkiaSurface {
@@ -27,7 +27,7 @@ function makeMockSurface(): MockSkiaSurface {
     restore: vi.fn(),
     concat: vi.fn(),
     drawPath: vi.fn(),
-    drawImage: vi.fn(),
+    drawImageRect: vi.fn(),
   };
   return {
     getCanvas: vi.fn(() => canvas),

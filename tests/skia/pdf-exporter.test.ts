@@ -31,7 +31,7 @@ function makePageCanvas(): unknown {
     restore: vi.fn(),
     concat: vi.fn(),
     drawPath: vi.fn(),
-    drawImage: vi.fn(),
+    drawImageRect: vi.fn(),
   };
 }
 

@@ -78,7 +78,6 @@ interface GraphicsState {
   lastPoint: Point | null;
   firstPoint: Point | null;
   polyVerts: Point[];
-  shapeEmitted: boolean;
 }
 
 function freshState(): GraphicsState {
@@ -89,7 +88,6 @@ function freshState(): GraphicsState {
     lastPoint: null,
     firstPoint: null,
     polyVerts: [],
-    shapeEmitted: false,
   };
 }
 
@@ -118,7 +116,6 @@ function hitGraphics(node: SkiaGraphicsNode, p: Point): boolean {
       s.fillActive = false;
       s.strokeActive = false;
       s.strokeWidth = 0;
-      s.shapeEmitted = false;
       resetGeometry(s);
       continue;
     }
@@ -146,8 +143,8 @@ function testShapeCommand(
   cmd: DrawCommand,
 ): boolean {
   switch (cmd.type) {
-    case 'rect': {
-      const hit = hitRect(
+    case 'rect':
+      return hitRect(
         p,
         cmd.x,
         cmd.y,
@@ -157,11 +154,8 @@ function testShapeCommand(
         s.strokeActive,
         s.strokeWidth,
       );
-      s.shapeEmitted = true;
-      return hit;
-    }
-    case 'ellipse': {
-      const hit = hitEllipse(
+    case 'ellipse':
+      return hitEllipse(
         p,
         cmd.cx,
         cmd.cy,
@@ -171,11 +165,8 @@ function testShapeCommand(
         s.strokeActive,
         s.strokeWidth,
       );
-      s.shapeEmitted = true;
-      return hit;
-    }
-    case 'circle': {
-      const hit = hitEllipse(
+    case 'circle':
+      return hitEllipse(
         p,
         cmd.cx,
         cmd.cy,
@@ -185,9 +176,6 @@ function testShapeCommand(
         s.strokeActive,
         s.strokeWidth,
       );
-      s.shapeEmitted = true;
-      return hit;
-    }
     case 'moveTo': {
       const pt = { x: cmd.x, y: cmd.y };
       s.firstPoint = pt;
@@ -203,7 +191,6 @@ function testShapeCommand(
         distanceToSegment(p, s.lastPoint, to) <= s.strokeWidth / 2;
       s.polyVerts.push(to);
       s.lastPoint = to;
-      s.shapeEmitted = true;
       return hit;
     }
     case 'closePath': {
@@ -213,7 +200,6 @@ function testShapeCommand(
         s.firstPoint !== null &&
         distanceToSegment(p, s.lastPoint, s.firstPoint) <= s.strokeWidth / 2
       ) {
-        s.shapeEmitted = true;
         return true;
       }
       if (
@@ -221,10 +207,8 @@ function testShapeCommand(
         s.polyVerts.length >= 3 &&
         pointInPolygon(p, s.polyVerts)
       ) {
-        s.shapeEmitted = true;
         return true;
       }
-      s.shapeEmitted = true;
       return false;
     }
     default:

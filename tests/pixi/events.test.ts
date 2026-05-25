@@ -202,14 +202,6 @@ describe('createStatusReporter / formatStatus', () => {
     expect(el.textContent).toBe('g2 pointerup');
   });
 
-  it('reset() restores the "ready" label', () => {
-    const el = document.createElement('pre');
-    el.textContent = 'g1 pointerdown';
-    const reporter = createStatusReporter(el);
-    reporter.reset();
-    expect(el.textContent).toBe('ready');
-  });
-
   it('message() sets arbitrary text on the target (used by PDF export progress)', () => {
     const el = document.createElement('pre');
     const reporter = createStatusReporter(el);
