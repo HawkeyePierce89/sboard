@@ -39,11 +39,4 @@ describe('production build', () => {
     },
     180_000,
   );
-
-  it('build artifact guard configuration is wired correctly', () => {
-    // Defensive: if someone tweaks the skip predicate this gives a clear signal
-    // that the env-gate moved without intent (the test must always be skipped
-    // locally and active in CI).
-    expect(SHOULD_RUN).toBe(process.env.CI === 'true');
-  });
 });

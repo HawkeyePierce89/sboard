@@ -57,15 +57,7 @@ export function findDescendantByName(
   container: Container,
   name: string,
 ): DisplayObject | undefined {
-  for (const child of container.children) {
-    if (child.name === name) return child;
-    const inner = (child as unknown as { children?: unknown }).children;
-    if (Array.isArray(inner)) {
-      const match = findDescendantByName(child as unknown as Container, name);
-      if (match) return match;
-    }
-  }
-  return undefined;
+  return container.getChildByName(name, true) ?? undefined;
 }
 
 function defaultLogger(message: string): void {

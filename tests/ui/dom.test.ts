@@ -3,7 +3,6 @@ import {
   getCanvasById,
   getButtonById,
   getElementById,
-  configureCanvasForDPR,
   DomLookupError,
 } from '../../src/ui/dom';
 
@@ -81,50 +80,6 @@ describe('ui/dom helpers', () => {
 
     it('throws when no element with the id exists', () => {
       expect(() => getButtonById('missing-button')).toThrow(DomLookupError);
-    });
-  });
-
-  describe('configureCanvasForDPR', () => {
-    it('sets backing-store pixel dimensions to cssSize × dpr and CSS size in pixels', () => {
-      const c = document.createElement('canvas');
-      const dims = configureCanvasForDPR(c, 500, 400, 2);
-
-      expect(c.width).toBe(1000);
-      expect(c.height).toBe(800);
-      expect(c.style.width).toBe('500px');
-      expect(c.style.height).toBe('400px');
-      expect(dims).toEqual({
-        cssWidth: 500,
-        cssHeight: 400,
-        pixelWidth: 1000,
-        pixelHeight: 800,
-        dpr: 2,
-      });
-    });
-
-    it('falls back to dpr=1 when window.devicePixelRatio is not supplied and undefined', () => {
-      const c = document.createElement('canvas');
-      const dims = configureCanvasForDPR(c, 320, 240, 1);
-      expect(c.width).toBe(320);
-      expect(c.height).toBe(240);
-      expect(dims.dpr).toBe(1);
-    });
-
-    it('treats non-positive dpr as 1 to avoid zero-size backing stores', () => {
-      const c = document.createElement('canvas');
-      const dims = configureCanvasForDPR(c, 100, 100, 0);
-      expect(c.width).toBe(100);
-      expect(c.height).toBe(100);
-      expect(dims.dpr).toBe(1);
-    });
-
-    it('rounds fractional pixel dimensions and never goes below 1px', () => {
-      const c = document.createElement('canvas');
-      const dims = configureCanvasForDPR(c, 1, 1, 0.49);
-      expect(c.width).toBeGreaterThanOrEqual(1);
-      expect(c.height).toBeGreaterThanOrEqual(1);
-      expect(dims.pixelWidth).toBeGreaterThanOrEqual(1);
-      expect(dims.pixelHeight).toBeGreaterThanOrEqual(1);
     });
   });
 

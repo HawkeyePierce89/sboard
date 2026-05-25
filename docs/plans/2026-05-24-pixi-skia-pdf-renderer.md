@@ -281,6 +281,18 @@ A TypeScript web application that:
 - [x] visually compare the Pixi and Skia canvases on the spec example — only antialiasing-level differences are acceptable — manual test (skipped - not automatable; requires running the dev server in a real browser and a human visual diff)
 - [x] generate a PDF, open it in Preview/Acrobat — confirm the shapes are **vector** (zoom in — no pixelation, elements can be selected) — manual test (skipped - not automatable; additionally blocked under Plan B because the bundled stock `canvaskit-wasm@0.41.1` build raises `PDFExportNotSupportedError`. Becomes possible after running `npm run build:canvaskit` to rebuild CanvasKit with `skia_enable_pdf=true` — see `docker/canvaskit-build/README.md`)
 
+### ➕ Task 18: Post-Task-17 code review fixes
+
+Out-of-scope correctness fixes that landed after Task 17 was marked complete. Recorded here per the plan's own "keep in sync" rule.
+
+- [x] canvaskit-loader: load `canvaskit.js` via injected `<script>` tag and read `globalThis.CanvasKitInit`. The previous dynamic `import()` returned an empty module because canvaskit.js is a UMD/IIFE bundle, not ESM — the app never bootstrapped in a real browser. (`src/skia/canvaskit-loader.ts`, `tests/skia/canvaskit-loader.test.ts`)
+- [x] main: drop `configureCanvasForDPR` on both canvases. The PIXI `Application` constructor reset the Pixi canvas back to CSS pixels while the Skia canvas stayed DPR-scaled, so on HiDPI displays Skia rendered the scene into only the top-left quarter of its surface. The DPR helper itself was later deleted in this task as dead code. (`src/main.ts`)
+- [x] renderer + hit-test: add an `endEntry` `DrawCommand` and reset both paint slots / hit-test state at the end of each `graphicsData` entry so a stroke or fill from one entry no longer leaks into a later entry that omits the corresponding style command. (`src/skia/renderer.ts`, `src/skia/hit-test.ts`, `src/pixi/graphics-commands.ts`, accompanying tests)
+- [x] minor: remove dead `configureCanvasForDPR` helper + tests; replace `findDescendantByName` recursion with Pixi's built-in `getChildByName(name, true)`; fix `randomColor` off-by-one (now spans full `0x000000–0xffffff` range); defer `URL.revokeObjectURL` to the next tick to match the JSDoc; delete the tautological `build artifact guard configuration is wired correctly` test.
+- [x] run tests, lint, typecheck — all clean
+
+Note: the "Coordinate systems" section below still mentions DPR scaling. That paragraph predates the iteration-17 decision to skip DPR entirely so both canvases stay pixel-for-pixel comparable at 500×400; the actual code path no longer applies any `ctx.scale(dpr,dpr)` or render-matrix scaling.
+
 ## Technical Details
 
 ### Directory layout

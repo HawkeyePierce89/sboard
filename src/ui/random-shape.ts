@@ -96,5 +96,5 @@ function drawShape(type: RandomShapeType, random: () => number): Graphics {
 }
 
 function randomColor(random: () => number): number {
-  return Math.floor(random() * 0xffffff);
+  return Math.floor(random() * 0x1000000);
 }

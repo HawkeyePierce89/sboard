@@ -276,3 +276,28 @@ describe('hitTest — invisible subtree', () => {
     expect(hitTest(tree, 50, 50)).toBeNull();
   });
 });
+
+describe('hitTest — endEntry boundary', () => {
+  it('does not leak fill paint between graphicsData entries', () => {
+    // Entry 1: filled rect at (0,0,100,100).
+    // Entry 2: same shape but no fill/stroke command (drawn invisible).
+    // Without an endEntry reset the second entry would inherit entry 1's
+    // fillActive and still report a hit on it.
+    const g = new Graphics();
+    const node = buildGroupNode(new Container(), [1, 0, 0, 1, 0, 0], [
+      buildGraphicsNode(g, [1, 0, 0, 1, 0, 0], [
+        { type: 'fill', color: 0xff0000, alpha: 1 },
+        { type: 'rect', x: 0, y: 0, w: 100, h: 100 },
+        { type: 'endEntry' },
+        // Entry 2: only geometry, no style. Should be ignored by hit-test.
+        { type: 'rect', x: 200, y: 200, w: 100, h: 100 },
+        { type: 'endEntry' },
+      ]),
+    ]);
+
+    // Entry 1 still hits.
+    expect(hitTest(node, 50, 50)).toBe(g);
+    // Entry 2 must NOT hit — it has no active paint.
+    expect(hitTest(node, 250, 250)).toBeNull();
+  });
+});

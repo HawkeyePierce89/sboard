@@ -360,7 +360,7 @@ describe('defaultTriggerDownload (jsdom DOM integration)', () => {
     revokeSpy.mockRestore();
   });
 
-  it('creates an anchor with download=fileName, clicks it, and revokes the URL', () => {
+  it('creates an anchor with download=fileName, clicks it, and revokes the URL', async () => {
     const blob = new Blob(['%PDF-'], { type: 'application/pdf' });
     const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click');
 
@@ -368,9 +368,13 @@ describe('defaultTriggerDownload (jsdom DOM integration)', () => {
 
     expect(createSpy).toHaveBeenCalledWith(blob);
     expect(clickSpy).toHaveBeenCalledTimes(1);
-    expect(revokeSpy).toHaveBeenCalledWith('blob:stub');
-    // anchor is removed afterward
+    // anchor is removed immediately
     expect(document.querySelector('a[download]')).toBeNull();
+    // revoke is deferred to the next tick so the browser has time to
+    // start the download before the URL is released.
+    expect(revokeSpy).not.toHaveBeenCalled();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(revokeSpy).toHaveBeenCalledWith('blob:stub');
 
     clickSpy.mockRestore();
   });
