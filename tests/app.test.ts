@@ -284,11 +284,35 @@ describe('createApp', () => {
     expect(app.pixiApp).toBeInstanceOf(Application);
     expect(app.pixiApp.stage.children).toContain(initialScene);
 
+    // A default imageProvider is built so sprites render without the
+    // caller having to wire CanvasKit's MakeImageFromCanvasImageSource
+    // manually. The PDF exporter re-uses this same instance via the
+    // exposed `imageProvider` field.
+    expect(typeof app.imageProvider).toBe('function');
+
     // Surface was redrawn on construction, with the white clear color.
     expect(mockSurface._canvas.clear).toHaveBeenCalledTimes(1);
     expect(mockSurface.flush).toHaveBeenCalledTimes(1);
 
     // Cleanup so subsequent tests don't share PIXI globals.
+    app.pixiApp.destroy(false);
+  });
+
+  it('forwards an explicit imageProvider through to the App', () => {
+    const initialScene = new Container();
+    const imageProvider = vi.fn(() => null);
+
+    const app = createApp({
+      pixiCanvas,
+      skiaCanvas,
+      canvasKit,
+      width: 500,
+      height: 400,
+      initialScene,
+      imageProvider,
+    });
+
+    expect(app.imageProvider).toBe(imageProvider);
     app.pixiApp.destroy(false);
   });
 });

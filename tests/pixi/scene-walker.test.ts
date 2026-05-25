@@ -77,7 +77,22 @@ describe('walkContainer — basic node typing', () => {
     expect(sp.texture).toBe(sprite.texture);
     expect(sp.width).toBe(32);
     expect(sp.height).toBe(24);
+    expect(sp.anchor).toEqual({ x: 0, y: 0 });
+    expect(sp.worldAlpha).toBe(1);
+    expect(sp.tint).toBe(0xffffff);
     expectMatrixApprox(sp.matrix, [2, 0, 0, 1.5, 5, 7]);
+  });
+
+  it('captures the sprite anchor (mirrored by renderer + hit-test)', () => {
+    const root = new Container();
+    const sprite = new Sprite(Texture.WHITE);
+    sprite.anchor.set(0.5, 0.25);
+    root.addChild(sprite);
+
+    const group = asGroup(walkContainer(root));
+    const sp = asSprite(group.children[0]);
+    expect(sp.anchor.x).toBeCloseTo(0.5, 6);
+    expect(sp.anchor.y).toBeCloseTo(0.25, 6);
   });
 });
 
@@ -184,6 +199,46 @@ describe('walkContainer — visibility', () => {
     expect(top.source).toBe(root);
     expect(top.children).toEqual([]);
   });
+
+  it('skips children with renderable=false (matches Pixi canvas renderer)', () => {
+    const root = new Container();
+    const drawn = new Graphics();
+    drawn.beginFill(0x111111, 1).drawRect(0, 0, 1, 1).endFill();
+    const ghost = new Graphics();
+    ghost.beginFill(0x222222, 1).drawRect(0, 0, 1, 1).endFill();
+    ghost.renderable = false;
+
+    root.addChild(drawn, ghost);
+
+    const top = asGroup(walkContainer(root));
+    expect(top.children).toHaveLength(1);
+    expect(asGraphics(top.children[0]).source).toBe(drawn);
+  });
+
+  it('drops a whole subtree under a renderable=false container', () => {
+    const root = new Container();
+    const sub = new Container();
+    sub.renderable = false;
+    const g = new Graphics();
+    g.beginFill(0xff0000, 1).drawRect(0, 0, 5, 5).endFill();
+    sub.addChild(g);
+    root.addChild(sub);
+
+    const top = asGroup(walkContainer(root));
+    expect(top.children).toEqual([]);
+  });
+
+  it('returns a degenerate group node when the root itself is renderable=false', () => {
+    const root = new Container();
+    root.renderable = false;
+    const g = new Graphics();
+    g.beginFill(0xff0000, 1).drawRect(0, 0, 5, 5).endFill();
+    root.addChild(g);
+
+    const top = asGroup(walkContainer(root));
+    expect(top.source).toBe(root);
+    expect(top.children).toEqual([]);
+  });
 });
 
 describe('walkContainer — alpha propagation', () => {
@@ -234,5 +289,33 @@ describe('walkContainer — alpha propagation', () => {
     const top = asGroup(walkContainer(root));
     const gfx = asGraphics(top.children[0]);
     expect(gfx.commands[1]).toEqual({ type: 'rect', x: 5, y: 6, w: 7, h: 8 });
+  });
+
+  it('captures sprite worldAlpha (parent.alpha * self.alpha) so the renderer can apply it', () => {
+    const root = new Container();
+    root.alpha = 0.5;
+    const sub = new Container();
+    sub.alpha = 0.5;
+    const sprite = new Sprite(Texture.WHITE);
+    sprite.alpha = 0.5;
+    sub.addChild(sprite);
+    root.addChild(sub);
+
+    const top = asGroup(walkContainer(root));
+    const subNode = asGroup(top.children[0]);
+    const sp = asSprite(subNode.children[0]);
+    // 0.5 * 0.5 * 0.5 = 0.125
+    expect(sp.worldAlpha).toBeCloseTo(0.125, 6);
+  });
+
+  it('captures sprite.tint as a numeric RGB via tintValue', () => {
+    const root = new Container();
+    const sprite = new Sprite(Texture.WHITE);
+    sprite.tint = 0xff8800;
+    root.addChild(sprite);
+
+    const top = asGroup(walkContainer(root));
+    const sp = asSprite(top.children[0]);
+    expect(sp.tint).toBe(0xff8800);
   });
 });

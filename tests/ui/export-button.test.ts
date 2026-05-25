@@ -47,7 +47,32 @@ describe('wireExportButton — happy path', () => {
     await flushMicrotasks();
 
     expect(exportFn).toHaveBeenCalledTimes(1);
-    expect(exportFn).toHaveBeenCalledWith(ck, scene, 500, 400);
+    expect(exportFn).toHaveBeenCalledWith(ck, scene, 500, 400, undefined);
+  });
+
+  it('forwards the imageProvider into the exportToPDF options when configured', async () => {
+    const button = setupDom();
+    const scene = new Container();
+    const blob = new Blob(['%PDF-'], { type: 'application/pdf' });
+    const exportFn = vi.fn<ExportFn>().mockResolvedValue(blob);
+    const triggerDownload = vi.fn();
+    const imageProvider = vi.fn(() => null);
+
+    wireExportButton(
+      {
+        canvasKit: fakeCanvasKit(),
+        scene: () => scene,
+        width: 10,
+        height: 10,
+        imageProvider,
+      },
+      { exportFn, triggerDownload },
+    );
+    button.click();
+    await flushMicrotasks();
+
+    expect(exportFn).toHaveBeenCalledTimes(1);
+    expect(exportFn.mock.calls[0][4]).toEqual({ imageProvider });
   });
 
   it('passes the resulting Blob and default filename "scene.pdf" to triggerDownload', async () => {
@@ -313,7 +338,13 @@ describe('wireExportButton — graceful degradation', () => {
     button.click();
     await flushMicrotasks();
 
-    expect(exportFn).toHaveBeenCalledWith(expect.anything(), scene, 100, 100);
+    expect(exportFn).toHaveBeenCalledWith(
+      expect.anything(),
+      scene,
+      100,
+      100,
+      undefined,
+    );
     expect(triggerDownload).toHaveBeenCalledWith(blob, 'scene.pdf');
   });
 });

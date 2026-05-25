@@ -10,6 +10,7 @@ import { hitTest } from './skia/hit-test';
 import {
   PixiToSkiaRenderer,
   colorToFloat4,
+  defaultImageProvider,
   type ImageProvider,
 } from './skia/renderer';
 import type { Canvas, Surface } from './skia/types';
@@ -37,6 +38,12 @@ export interface AppOptions {
    * so the same handlers fire whichever canvas the user clicks on.
    */
   skiaCanvas?: HTMLCanvasElement;
+  /**
+   * Optional sprite-to-`Image` resolver. Stored on the App so callers
+   * (e.g. the PDF exporter) can re-use the same cached provider that
+   * the on-screen renderer uses, avoiding duplicate image uploads.
+   */
+  imageProvider?: ImageProvider;
 }
 
 /**
@@ -56,6 +63,7 @@ export class App {
   readonly skiaSurface: Surface;
   readonly renderer: PixiToSkiaRenderer;
   readonly skiaCanvas: HTMLCanvasElement | undefined;
+  readonly imageProvider: ImageProvider | undefined;
   currentScene: Container;
   private readonly clearColor: Float32Array;
 
@@ -67,6 +75,7 @@ export class App {
     this.currentScene = opts.initialScene;
     this.clearColor = colorToFloat4(opts.backgroundColor ?? 0xffffff, 1);
     this.skiaCanvas = opts.skiaCanvas;
+    this.imageProvider = opts.imageProvider;
 
     this.pixiApp.stage.addChild(opts.initialScene);
     this.redrawSkia();
@@ -182,7 +191,11 @@ export function createApp(opts: CreateAppOptions): App {
     backgroundColor,
   });
 
-  const renderer = new PixiToSkiaRenderer(opts.canvasKit, opts.imageProvider);
+  // Build one provider per App so the on-screen renderer and the PDF
+  // exporter share the same Image cache — otherwise every PDF export
+  // would re-upload the texture pixels into CanvasKit.
+  const imageProvider = opts.imageProvider ?? defaultImageProvider(opts.canvasKit);
+  const renderer = new PixiToSkiaRenderer(opts.canvasKit, imageProvider);
 
   return new App({
     pixiApp,
@@ -192,5 +205,6 @@ export function createApp(opts: CreateAppOptions): App {
     initialScene: opts.initialScene,
     backgroundColor,
     skiaCanvas: opts.skiaCanvas,
+    imageProvider,
   });
 }

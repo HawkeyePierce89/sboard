@@ -1,5 +1,5 @@
-import type { CanvasKit, Image, PathBuilder } from 'canvaskit-wasm';
-import type { Container, Texture } from 'pixi.js';
+import type { CanvasKit, ColorFilter, Image, PathBuilder } from 'canvaskit-wasm';
+import type { BaseTexture, Container, Texture } from 'pixi.js';
 import type { DrawCommand } from '../pixi/graphics-commands';
 import type {
   SkiaGraphicsNode,
@@ -52,6 +52,93 @@ export function colorToFloat4(color: number, alpha: number): Float32Array {
 }
 
 export type ImageProvider = (texture: Texture) => Image | null;
+
+/**
+ * Build an `ImageProvider` that turns a PIXI `Texture` into a CanvasKit
+ * `Image` via `MakeImageFromCanvasImageSource`. Caches by `baseTexture`
+ * so repeated redraws of the same sprite don't re-upload pixels.
+ *
+ * Returns `null` for textures whose underlying resource isn't a
+ * `CanvasImageSource` (e.g. raw `BufferResource`) or that haven't loaded
+ * yet — the renderer treats `null` as a silent skip, which matches what
+ * Pixi does for a still-loading texture.
+ *
+ * Two correctness rules govern what we *insert* into the cache:
+ *   - Never cache a `null`/failed result. PIXI image resources start
+ *     out unready (`HTMLImageElement` still loading, `Texture.from(url)`
+ *     mid-decode); caching the early `null` would poison that
+ *     `BaseTexture` for the rest of the app even after the resource
+ *     becomes valid.
+ *   - Never cache mutable sources (`HTMLCanvasElement`,
+ *     `HTMLVideoElement`, `OffscreenCanvas`). Their pixels change
+ *     between frames, so a one-shot upload would freeze the Skia /
+ *     PDF output on the first frame. Re-upload on every redraw.
+ *
+ * That leaves `HTMLImageElement` and `ImageBitmap` (immutable once
+ * decoded) as the only sources that benefit from caching.
+ *
+ * Native-memory lifetime: CanvasKit `Image` holds WASM-side pixels that
+ * JS GC cannot reclaim — `image.delete()` must be called explicitly.
+ * For the uncached (mutable-source) path we therefore track the
+ * most-recently-handed-out `Image` per `BaseTexture` and release it
+ * just before producing the next one. Without that bookkeeping, every
+ * redraw of a canvas-/video-backed sprite would leak a fresh `Image`
+ * (its sole use is the `drawImageRect` call inside the renderer, which
+ * never deletes the image because immutable cached entries reuse it).
+ */
+export function defaultImageProvider(canvasKit: CanvasKit): ImageProvider {
+  const cache = new WeakMap<BaseTexture, Image>();
+  const ephemeral = new WeakMap<BaseTexture, Image>();
+  return (texture) => {
+    const base = texture.baseTexture;
+    const cached = cache.get(base);
+    if (cached) return cached;
+    const previousEphemeral = ephemeral.get(base);
+    if (previousEphemeral) {
+      previousEphemeral.delete();
+      ephemeral.delete(base);
+    }
+    const source = extractCanvasImageSource(base);
+    if (!source) return null;
+    let image: Image | null;
+    try {
+      image = canvasKit.MakeImageFromCanvasImageSource(source);
+    } catch {
+      image = null;
+    }
+    if (image) {
+      if (isImmutableSource(source)) {
+        cache.set(base, image);
+      } else {
+        ephemeral.set(base, image);
+      }
+    }
+    return image;
+  };
+}
+
+function isImmutableSource(source: CanvasImageSource): boolean {
+  return (
+    (typeof HTMLImageElement !== 'undefined' && source instanceof HTMLImageElement) ||
+    (typeof ImageBitmap !== 'undefined' && source instanceof ImageBitmap)
+  );
+}
+
+function extractCanvasImageSource(base: BaseTexture): CanvasImageSource | null {
+  const resource = (base.resource as { source?: unknown } | undefined) ?? null;
+  const source = resource?.source;
+  if (!source) return null;
+  if (
+    (typeof HTMLImageElement !== 'undefined' && source instanceof HTMLImageElement) ||
+    (typeof HTMLCanvasElement !== 'undefined' && source instanceof HTMLCanvasElement) ||
+    (typeof HTMLVideoElement !== 'undefined' && source instanceof HTMLVideoElement) ||
+    (typeof ImageBitmap !== 'undefined' && source instanceof ImageBitmap) ||
+    (typeof OffscreenCanvas !== 'undefined' && source instanceof OffscreenCanvas)
+  ) {
+    return source as CanvasImageSource;
+  }
+  return null;
+}
 
 /**
  * Walks a `SkiaSceneNode` tree and emits the matching CanvasKit draw calls.
@@ -227,6 +314,92 @@ export class PixiToSkiaRenderer {
     if (!this.imageProvider) return;
     const image = this.imageProvider(node.texture);
     if (!image) return;
-    canvas.drawImage(image, 0, 0, null);
+    const ck = this.canvasKit;
+    // The walker's matrix already includes the sprite's scale, so the
+    // bitmap dimensions in local space are the texture's pixel size, not
+    // `node.width/height` (which is post-scale). Shift the draw origin
+    // by `-anchor * size` so the sprite renders the same as PIXI.
+    const w = node.texture.width;
+    const h = node.texture.height;
+    const dstX = -node.anchor.x * w;
+    const dstY = -node.anchor.y * h;
+    // Use `drawImageRect` with `texture.frame` so atlas/spritesheet
+    // frames (where `frame` is a sub-rect of the baseTexture) draw the
+    // right portion instead of the entire underlying atlas. For simple
+    // `Texture.from(url)` sprites `frame` already covers the full
+    // baseTexture, so the call is equivalent to the previous
+    // `drawImage` for the untrimmed PNG case the spec exercises.
+    // Trimmed-atlas `trim` offsets and frame `rotate` are intentionally
+    // not honored — the spec only requires simple PNG sprites and PIXI's
+    // canvas renderer is the source of truth for that subset.
+    //
+    // `frame` is in *logical* units, but the CanvasKit `Image` holds the
+    // raw bitmap (= `frame * baseTexture.resolution` pixels). Pixi's
+    // canvas renderer multiplies the source rect by `resolution` for
+    // exactly that reason; mirror it here so a @2x/@3x PNG samples the
+    // right pixels of the underlying bitmap instead of the top-left
+    // quadrant.
+    const frame = node.texture.frame;
+    const resolution = node.texture.baseTexture.resolution;
+    const src = ck.XYWHRect(
+      frame.x * resolution,
+      frame.y * resolution,
+      frame.width * resolution,
+      frame.height * resolution,
+    );
+    const dst = ck.XYWHRect(dstX, dstY, w, h);
+    const { paint, filter } = this.makeSpritePaint(node);
+    try {
+      canvas.drawImageRect(image, src, dst, paint);
+    } finally {
+      paint.delete();
+      filter?.delete();
+    }
+  }
+
+  /**
+   * Build the `Paint` used to draw a sprite image. Pixi's canvas
+   * renderer multiplies the sprite's `worldAlpha` into the output and
+   * multiplies pixel RGB by `tint`; we mirror both via `setAlphaf` and
+   * a `Modulate` color filter so a sprite with `alpha < 1` or
+   * `tint !== 0xFFFFFF` renders the same on the Skia canvas and in
+   * exported PDFs as it does on the Pixi canvas.
+   *
+   * Both the `Paint` and the optional `ColorFilter` are CanvasKit
+   * Embind objects whose WASM-side memory JS GC cannot reclaim, so the
+   * caller must `.delete()` each one after the draw. We return the
+   * filter alongside the paint instead of relying on the paint's
+   * internal reference, because `setColorFilter` only adds a ref to
+   * the underlying SkColorFilter — the JS-side Embind wrapper still
+   * needs its own explicit release.
+   */
+  private makeSpritePaint(node: SkiaSpriteNode): {
+    paint: Paint;
+    filter: ColorFilter | null;
+  } {
+    const ck = this.canvasKit;
+    const paint = new ck.Paint();
+    let filter: ColorFilter | null = null;
+    // If any of the following Embind calls throws (e.g. WASM OOM,
+    // invalid arg in `MakeBlend`/`setColorFilter`), the partially
+    // constructed `Paint`/`ColorFilter` would otherwise be orphaned —
+    // the caller's `try/finally` only kicks in after this returns.
+    try {
+      if (node.worldAlpha < 1) {
+        paint.setAlphaf(node.worldAlpha);
+      }
+      if (node.tint !== 0xffffff) {
+        filter = ck.ColorFilter.MakeBlend(
+          colorToFloat4(node.tint, 1),
+          ck.BlendMode.Modulate,
+        );
+        paint.setColorFilter(filter);
+      }
+      return { paint, filter };
+    } catch (err) {
+      filter?.delete();
+      paint.delete();
+      throw err;
+    }
   }
 }

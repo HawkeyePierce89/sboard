@@ -262,6 +262,24 @@ describe('hitTest — sprites', () => {
     expect(hitTest(tree, 9, 30)).toBeNull();
     expect(hitTest(tree, 30, 65)).toBeNull();
   });
+
+  it('respects sprite anchor when hit-testing (anchor=0.5 → bounds shift by -w/2,-h/2)', () => {
+    const root = new Container();
+    const sprite = new Sprite(Texture.WHITE); // 16×16
+    sprite.anchor.set(0.5, 0.5);
+    sprite.position.set(100, 100);
+    root.addChild(sprite);
+    const tree = walkContainer(root);
+
+    // Texture size 16, anchor centred → bounds in world space:
+    //   [100 - 8 .. 100 + 8] x [100 - 8 .. 100 + 8]
+    expect(hitTest(tree, 100, 100)).toBe(sprite);
+    expect(hitTest(tree, 93, 100)).toBe(sprite);
+    // Just outside the centred bbox on the right:
+    expect(hitTest(tree, 109, 100)).toBeNull();
+    // Old (no-anchor) top-left rect would have hit (105, 105); now it misses.
+    expect(hitTest(tree, 115, 115)).toBeNull();
+  });
 });
 
 describe('hitTest — invisible subtree', () => {

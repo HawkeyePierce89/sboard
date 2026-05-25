@@ -61,11 +61,14 @@ function hitSprite(node: SkiaSpriteNode, p: Point): boolean {
   // we already converted the test point into local space by applying
   // `inv(node.matrix)` (which contains the sprite's scale). The local
   // bounds therefore come from the texture itself — the renderer draws
-  // the image at local (0, 0) with no extra scaling.
+  // the image at local (-anchor.x*w, -anchor.y*h) (anchor mirrors PIXI's
+  // draw-time origin shift), so the hit rectangle is offset accordingly.
   const w = node.texture.width;
   const h = node.texture.height;
   if (w <= 0 || h <= 0) return false;
-  return p.x >= 0 && p.x <= w && p.y >= 0 && p.y <= h;
+  const minX = -node.anchor.x * w;
+  const minY = -node.anchor.y * h;
+  return p.x >= minX && p.x <= minX + w && p.y >= minY && p.y <= minY + h;
 }
 
 interface GraphicsState {

@@ -4,6 +4,7 @@ import type { CanvasKit, Image } from 'canvaskit-wasm';
 import {
   PixiToSkiaRenderer,
   colorToFloat4,
+  defaultImageProvider,
   invertMatrix2D,
   pixiMatrixToSkia,
 } from '../../src/skia/renderer';
@@ -16,6 +17,8 @@ interface SpyPaint {
   setColor: ReturnType<typeof vi.fn>;
   setStrokeWidth: ReturnType<typeof vi.fn>;
   setAntiAlias: ReturnType<typeof vi.fn>;
+  setAlphaf: ReturnType<typeof vi.fn>;
+  setColorFilter: ReturnType<typeof vi.fn>;
   delete: ReturnType<typeof vi.fn>;
   _kind: 'paint';
   _id: number;
@@ -47,6 +50,14 @@ interface SpyCanvas {
   concat: ReturnType<typeof vi.fn>;
   drawPath: ReturnType<typeof vi.fn>;
   drawImage: ReturnType<typeof vi.fn>;
+  drawImageRect: ReturnType<typeof vi.fn>;
+}
+
+interface SpyColorFilter {
+  _kind: 'colorFilter';
+  color: Float32Array;
+  mode: unknown;
+  delete: ReturnType<typeof vi.fn>;
 }
 
 interface MockCanvasKit {
@@ -54,14 +65,17 @@ interface MockCanvasKit {
   paints: SpyPaint[];
   builders: SpyPathBuilder[];
   paths: SpyPath[];
+  colorFilters: SpyColorFilter[];
   fill: 'FILL';
   stroke: 'STROKE';
+  modulate: 'MODULATE';
 }
 
 function makeMockCanvasKit(): MockCanvasKit {
   const paints: SpyPaint[] = [];
   const builders: SpyPathBuilder[] = [];
   const paths: SpyPath[] = [];
+  const colorFilters: SpyColorFilter[] = [];
 
   const PaintCtor = vi.fn(function (): SpyPaint {
     const paint: SpyPaint = {
@@ -69,6 +83,8 @@ function makeMockCanvasKit(): MockCanvasKit {
       setColor: vi.fn(),
       setStrokeWidth: vi.fn(),
       setAntiAlias: vi.fn(),
+      setAlphaf: vi.fn(),
+      setColorFilter: vi.fn(),
       delete: vi.fn(),
       _kind: 'paint',
       _id: paints.length,
@@ -116,13 +132,35 @@ function makeMockCanvasKit(): MockCanvasKit {
     Paint: PaintCtor,
     PathBuilder: PathBuilderCtor,
     PaintStyle: { Fill: 'FILL', Stroke: 'STROKE' },
+    BlendMode: { Modulate: 'MODULATE' },
+    ColorFilter: {
+      MakeBlend: vi.fn((color: Float32Array, mode: unknown) => {
+        const filter: SpyColorFilter = {
+          _kind: 'colorFilter',
+          color,
+          mode,
+          delete: vi.fn(),
+        };
+        colorFilters.push(filter);
+        return filter;
+      }),
+    },
     XYWHRect: (x: number, y: number, w: number, h: number) =>
       [x, y, x + w, y + h] as unknown,
     LTRBRect: (l: number, t: number, r: number, b: number) =>
       [l, t, r, b] as unknown,
   } as unknown as CanvasKit;
 
-  return { ck, paints, builders, paths, fill: 'FILL', stroke: 'STROKE' };
+  return {
+    ck,
+    paints,
+    builders,
+    paths,
+    colorFilters,
+    fill: 'FILL',
+    stroke: 'STROKE',
+    modulate: 'MODULATE',
+  };
 }
 
 function makeMockCanvas(): SpyCanvas {
@@ -132,6 +170,7 @@ function makeMockCanvas(): SpyCanvas {
     concat: vi.fn(),
     drawPath: vi.fn(),
     drawImage: vi.fn(),
+    drawImageRect: vi.fn(),
   };
 }
 
@@ -511,7 +550,7 @@ describe('PixiToSkiaRenderer — multi-shape Graphics', () => {
 });
 
 describe('PixiToSkiaRenderer — sprites', () => {
-  it('calls drawImage(image, 0, 0) using the imageProvider', () => {
+  it('calls drawImageRect(image, frame, dst, paint) using the imageProvider when anchor is (0,0)', () => {
     const mock = makeMockCanvasKit();
     const canvas = makeMockCanvas();
     const fakeImage = { __tag: 'image' } as unknown as Image;
@@ -519,20 +558,174 @@ describe('PixiToSkiaRenderer — sprites', () => {
 
     const renderer = new PixiToSkiaRenderer(mock.ck, imageProvider);
     const root = new Container();
-    const sprite = new Sprite(Texture.WHITE);
+    const sprite = new Sprite(Texture.WHITE); // 16×16
     sprite.position.set(5, 7);
     root.addChild(sprite);
 
     renderer.renderContainer(castCanvas(canvas), root);
 
     expect(imageProvider).toHaveBeenCalledWith(sprite.texture);
-    expect(canvas.drawImage).toHaveBeenCalledTimes(1);
-    expect(canvas.drawImage.mock.calls[0][0]).toBe(fakeImage);
-    expect(canvas.drawImage.mock.calls[0][1]).toBe(0);
-    expect(canvas.drawImage.mock.calls[0][2]).toBe(0);
+    expect(canvas.drawImageRect).toHaveBeenCalledTimes(1);
+    const [img, src, dst] = canvas.drawImageRect.mock.calls[0];
+    expect(img).toBe(fakeImage);
+    // Texture.WHITE has frame (0, 0, 16, 16) → src LTRB is [0, 0, 16, 16].
+    expect(src).toEqual([0, 0, 16, 16]);
+    // Anchor (0,0) → dst origin is local (0,0); width/height = 16. Use
+    // `toBeCloseTo` per coordinate so `-0` (from `-0 * w`) compares
+    // equal to `+0`.
+    const dstArr = dst as number[];
+    expect(dstArr).toHaveLength(4);
+    expect(dstArr[0]).toBeCloseTo(0, 10);
+    expect(dstArr[1]).toBeCloseTo(0, 10);
+    expect(dstArr[2]).toBe(16);
+    expect(dstArr[3]).toBe(16);
+    expect(canvas.drawImage).not.toHaveBeenCalled();
   });
 
-  it('silently skips the sprite when no imageProvider is configured (no drawImage call)', () => {
+  it('shifts the destination rect by -anchor*size so anchored sprites match PIXI', () => {
+    const mock = makeMockCanvasKit();
+    const canvas = makeMockCanvas();
+    const fakeImage = { __tag: 'image' } as unknown as Image;
+    const renderer = new PixiToSkiaRenderer(mock.ck, () => fakeImage);
+
+    const root = new Container();
+    const sprite = new Sprite(Texture.WHITE); // 16×16
+    sprite.anchor.set(0.5, 0.5);
+    root.addChild(sprite);
+
+    renderer.renderContainer(castCanvas(canvas), root);
+
+    expect(canvas.drawImageRect).toHaveBeenCalledTimes(1);
+    const dst = canvas.drawImageRect.mock.calls[0][2];
+    // -0.5 * 16 = -8; rect extends from (-8,-8) to (8,8).
+    expect(dst).toEqual([-8, -8, 8, 8]);
+  });
+
+  it('uses the texture frame as the source rect (so atlas frames draw the right region)', () => {
+    const mock = makeMockCanvasKit();
+    const canvas = makeMockCanvas();
+    const fakeImage = { __tag: 'atlas' } as unknown as Image;
+    const renderer = new PixiToSkiaRenderer(mock.ck, () => fakeImage);
+
+    const root = new Container();
+    const sprite = new Sprite(Texture.WHITE);
+    // Simulate an atlas sub-frame at (4, 8, 6, 5) inside the WHITE texture.
+    sprite.texture.frame.x = 4;
+    sprite.texture.frame.y = 8;
+    sprite.texture.frame.width = 6;
+    sprite.texture.frame.height = 5;
+    root.addChild(sprite);
+
+    renderer.renderContainer(castCanvas(canvas), root);
+
+    expect(canvas.drawImageRect).toHaveBeenCalledTimes(1);
+    const src = canvas.drawImageRect.mock.calls[0][1];
+    expect(src).toEqual([4, 8, 10, 13]);
+  });
+
+  it('scales the source rect by baseTexture.resolution so high-DPI textures sample the right pixels', () => {
+    const mock = makeMockCanvasKit();
+    const canvas = makeMockCanvas();
+    const fakeImage = { __tag: 'hidpi' } as unknown as Image;
+    const renderer = new PixiToSkiaRenderer(mock.ck, () => fakeImage);
+
+    // Build a SkiaSpriteNode directly so we can simulate a resolution=2
+    // baseTexture without touching the shared Texture.WHITE singleton.
+    const node: SkiaSceneNode = {
+      type: 'sprite',
+      matrix: [1, 0, 0, 1, 0, 0],
+      texture: {
+        width: 8,
+        height: 10,
+        frame: { x: 1, y: 2, width: 4, height: 5 },
+        baseTexture: { resolution: 2 },
+      } as unknown as import('pixi.js').Texture,
+      width: 8,
+      height: 10,
+      anchor: { x: 0, y: 0 },
+      worldAlpha: 1,
+      tint: 0xffffff,
+      source: {} as unknown as import('pixi.js').DisplayObject,
+    };
+
+    renderer.render(castCanvas(canvas), node);
+
+    // src LTRB = (x*r, y*r, (x+w)*r, (y+h)*r) = (2, 4, 10, 14)
+    const src = canvas.drawImageRect.mock.calls[0][1];
+    expect(src).toEqual([2, 4, 10, 14]);
+    // dst stays in logical units — anchor (0,0) → (0,0,w,h). Compare
+    // per-coordinate with `toBeCloseTo` so `-0` (from `-0 * w`) matches
+    // `+0` (same workaround as the anchor=(0,0) sprite test above).
+    const dst = canvas.drawImageRect.mock.calls[0][2] as number[];
+    expect(dst).toHaveLength(4);
+    expect(dst[0]).toBeCloseTo(0, 10);
+    expect(dst[1]).toBeCloseTo(0, 10);
+    expect(dst[2]).toBe(8);
+    expect(dst[3]).toBe(10);
+  });
+
+  it('applies worldAlpha to the sprite paint via setAlphaf', () => {
+    const mock = makeMockCanvasKit();
+    const canvas = makeMockCanvas();
+    const renderer = new PixiToSkiaRenderer(mock.ck, () => ({}) as unknown as Image);
+
+    const root = new Container();
+    root.alpha = 0.5;
+    const sprite = new Sprite(Texture.WHITE);
+    sprite.alpha = 0.5; // worldAlpha = 0.25
+    root.addChild(sprite);
+
+    renderer.renderContainer(castCanvas(canvas), root);
+
+    expect(canvas.drawImageRect).toHaveBeenCalledTimes(1);
+    const paint = canvas.drawImageRect.mock.calls[0][3] as SpyPaint;
+    expect(paint.setAlphaf).toHaveBeenCalledTimes(1);
+    expect(paint.setAlphaf.mock.calls[0][0]).toBeCloseTo(0.25, 6);
+    expect(paint.setColorFilter).not.toHaveBeenCalled();
+    // Paint is always released after the draw.
+    expect(paint.delete).toHaveBeenCalledTimes(1);
+  });
+
+  it('applies sprite.tint via a Modulate ColorFilter on the paint', () => {
+    const mock = makeMockCanvasKit();
+    const canvas = makeMockCanvas();
+    const renderer = new PixiToSkiaRenderer(mock.ck, () => ({}) as unknown as Image);
+
+    const root = new Container();
+    const sprite = new Sprite(Texture.WHITE);
+    sprite.tint = 0xff0000;
+    root.addChild(sprite);
+
+    renderer.renderContainer(castCanvas(canvas), root);
+
+    expect(canvas.drawImageRect).toHaveBeenCalledTimes(1);
+    const paint = canvas.drawImageRect.mock.calls[0][3] as SpyPaint;
+    expect(paint.setColorFilter).toHaveBeenCalledTimes(1);
+    expect(mock.colorFilters).toHaveLength(1);
+    expect(Array.from(mock.colorFilters[0].color)).toEqual([1, 0, 0, 1]);
+    expect(mock.colorFilters[0].mode).toBe(mock.modulate);
+    expect(paint.setAlphaf).not.toHaveBeenCalled();
+    // The color filter is an Embind object; the renderer must release
+    // it after the draw to avoid leaking WASM memory on every redraw.
+    expect(paint.delete).toHaveBeenCalledTimes(1);
+    expect(mock.colorFilters[0].delete).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not set alpha or color filter for a default sprite (alpha=1, tint=0xFFFFFF)', () => {
+    const mock = makeMockCanvasKit();
+    const canvas = makeMockCanvas();
+    const renderer = new PixiToSkiaRenderer(mock.ck, () => ({}) as unknown as Image);
+
+    const root = new Container();
+    root.addChild(new Sprite(Texture.WHITE));
+    renderer.renderContainer(castCanvas(canvas), root);
+
+    const paint = canvas.drawImageRect.mock.calls[0][3] as SpyPaint;
+    expect(paint.setAlphaf).not.toHaveBeenCalled();
+    expect(paint.setColorFilter).not.toHaveBeenCalled();
+  });
+
+  it('silently skips the sprite when no imageProvider is configured (no drawImageRect call)', () => {
     const mock = makeMockCanvasKit();
     const canvas = makeMockCanvas();
     const renderer = new PixiToSkiaRenderer(mock.ck);
@@ -541,7 +734,7 @@ describe('PixiToSkiaRenderer — sprites', () => {
     root.addChild(new Sprite(Texture.WHITE));
     renderer.renderContainer(castCanvas(canvas), root);
 
-    expect(canvas.drawImage).not.toHaveBeenCalled();
+    expect(canvas.drawImageRect).not.toHaveBeenCalled();
     // The sprite node still gets save/concat/restore though:
     expect(canvas.save).toHaveBeenCalledTimes(2);
     expect(canvas.restore).toHaveBeenCalledTimes(2);
@@ -556,7 +749,7 @@ describe('PixiToSkiaRenderer — sprites', () => {
     root.addChild(new Sprite(Texture.WHITE));
     renderer.renderContainer(castCanvas(canvas), root);
 
-    expect(canvas.drawImage).not.toHaveBeenCalled();
+    expect(canvas.drawImageRect).not.toHaveBeenCalled();
   });
 });
 
@@ -599,5 +792,163 @@ describe('PixiToSkiaRenderer.render — direct scene node entry point', () => {
     expect(canvas.save).toHaveBeenCalledTimes(1);
     expect(canvas.restore).toHaveBeenCalledTimes(1);
     expect(canvas.concat).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('defaultImageProvider', () => {
+  function fakeTexture(source: unknown): Texture {
+    const baseTexture = {
+      resource: { source },
+    } as unknown as Texture['baseTexture'];
+    return { baseTexture } as unknown as Texture;
+  }
+
+  it('calls MakeImageFromCanvasImageSource for an HTMLImageElement and caches the result', () => {
+    const img = { __tag: 'img' } as unknown as Image;
+    const make = vi.fn(() => img);
+    const ck = {
+      MakeImageFromCanvasImageSource: make,
+    } as unknown as CanvasKit;
+    const source = document.createElement('img');
+    const texture = fakeTexture(source);
+
+    const provider = defaultImageProvider(ck);
+    expect(provider(texture)).toBe(img);
+    expect(provider(texture)).toBe(img);
+    // The cache key is the baseTexture — a second call must NOT hit the CanvasKit shim.
+    expect(make).toHaveBeenCalledTimes(1);
+    expect(make).toHaveBeenCalledWith(source);
+  });
+
+  it('returns null without calling MakeImageFromCanvasImageSource for an unsupported resource', () => {
+    const make = vi.fn(() => ({}) as unknown as Image);
+    const ck = {
+      MakeImageFromCanvasImageSource: make,
+    } as unknown as CanvasKit;
+    const texture = fakeTexture(new Uint8Array(4)); // Arbitrary, non-canvas source.
+
+    const provider = defaultImageProvider(ck);
+    expect(provider(texture)).toBeNull();
+    expect(provider(texture)).toBeNull();
+    expect(make).not.toHaveBeenCalled();
+  });
+
+  it('retries instead of poisoning the cache when MakeImageFromCanvasImageSource throws', () => {
+    const make = vi.fn(() => {
+      throw new Error('boom');
+    });
+    const ck = {
+      MakeImageFromCanvasImageSource: make,
+    } as unknown as CanvasKit;
+    const texture = fakeTexture(document.createElement('img'));
+
+    const provider = defaultImageProvider(ck);
+    expect(provider(texture)).toBeNull();
+    expect(provider(texture)).toBeNull();
+    // Every call re-attempts — a transient failure (image still
+    // loading, decode race) must NOT permanently block this texture.
+    expect(make).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not cache a null result so a later-ready HTMLImageElement can succeed', () => {
+    const realImage = { __tag: 'real' } as unknown as Image;
+    let unreadyOnce = true;
+    const make = vi.fn(() => {
+      if (unreadyOnce) {
+        unreadyOnce = false;
+        return null;
+      }
+      return realImage;
+    });
+    const ck = {
+      MakeImageFromCanvasImageSource: make,
+    } as unknown as CanvasKit;
+    const texture = fakeTexture(document.createElement('img'));
+
+    const provider = defaultImageProvider(ck);
+    expect(provider(texture)).toBeNull();
+    // Once the underlying image is ready (CanvasKit now returns an
+    // Image), the next call must produce it instead of serving a
+    // cached null.
+    expect(provider(texture)).toBe(realImage);
+    expect(make).toHaveBeenCalledTimes(2);
+  });
+
+  it('re-uploads HTMLCanvasElement sources every call so canvas redraws appear', () => {
+    const first = { __tag: 'first', delete: vi.fn() } as unknown as Image;
+    const second = { __tag: 'second', delete: vi.fn() } as unknown as Image;
+    let call = 0;
+    const make = vi.fn(() => (call++ === 0 ? first : second));
+    const ck = {
+      MakeImageFromCanvasImageSource: make,
+    } as unknown as CanvasKit;
+    const texture = fakeTexture(document.createElement('canvas'));
+
+    const provider = defaultImageProvider(ck);
+    expect(provider(texture)).toBe(first);
+    // HTMLCanvasElement pixels change between frames — the provider
+    // must NOT cache, so a later redraw is reflected on the Skia
+    // canvas and in the PDF export.
+    expect(provider(texture)).toBe(second);
+    expect(make).toHaveBeenCalledTimes(2);
+  });
+
+  it('re-uploads HTMLVideoElement sources every call so video frames advance', () => {
+    const frame1 = { __tag: 'frame1', delete: vi.fn() } as unknown as Image;
+    const frame2 = { __tag: 'frame2', delete: vi.fn() } as unknown as Image;
+    let call = 0;
+    const make = vi.fn(() => (call++ === 0 ? frame1 : frame2));
+    const ck = {
+      MakeImageFromCanvasImageSource: make,
+    } as unknown as CanvasKit;
+    const texture = fakeTexture(document.createElement('video'));
+
+    const provider = defaultImageProvider(ck);
+    expect(provider(texture)).toBe(frame1);
+    expect(provider(texture)).toBe(frame2);
+    expect(make).toHaveBeenCalledTimes(2);
+  });
+
+  it('releases the previous ephemeral Image before producing the next one (no unbounded native leak)', () => {
+    const first = { __tag: 'first', delete: vi.fn() } as unknown as Image;
+    const second = { __tag: 'second', delete: vi.fn() } as unknown as Image;
+    let call = 0;
+    const make = vi.fn(() => (call++ === 0 ? first : second));
+    const ck = {
+      MakeImageFromCanvasImageSource: make,
+    } as unknown as CanvasKit;
+    const texture = fakeTexture(document.createElement('canvas'));
+
+    const provider = defaultImageProvider(ck);
+    expect(provider(texture)).toBe(first);
+    // CanvasKit Image holds native (WASM-side) memory that JS GC cannot
+    // reclaim, so the previous ephemeral Image must be `.delete()`-ed
+    // before we allocate a fresh one — otherwise every redraw of a
+    // canvas-/video-backed sprite would leak a new Image.
+    expect((first as unknown as { delete: ReturnType<typeof vi.fn> }).delete)
+      .not.toHaveBeenCalled();
+    expect(provider(texture)).toBe(second);
+    expect((first as unknown as { delete: ReturnType<typeof vi.fn> }).delete)
+      .toHaveBeenCalledTimes(1);
+    expect((second as unknown as { delete: ReturnType<typeof vi.fn> }).delete)
+      .not.toHaveBeenCalled();
+  });
+
+  it('does not release cached immutable Images on subsequent calls', () => {
+    const img = { __tag: 'img', delete: vi.fn() } as unknown as Image;
+    const make = vi.fn(() => img);
+    const ck = {
+      MakeImageFromCanvasImageSource: make,
+    } as unknown as CanvasKit;
+    const texture = fakeTexture(document.createElement('img'));
+
+    const provider = defaultImageProvider(ck);
+    provider(texture);
+    provider(texture);
+    // Cached immutable Image must outlive a single render — the same
+    // instance is returned on every call, so .delete() on it would
+    // break the next call's drawImageRect.
+    expect((img as unknown as { delete: ReturnType<typeof vi.fn> }).delete)
+      .not.toHaveBeenCalled();
   });
 });

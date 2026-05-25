@@ -5,6 +5,7 @@ import {
   PDFExportNotSupportedError,
   type ExportToPDFOptions,
 } from '../skia/pdf-exporter';
+import type { ImageProvider } from '../skia/renderer';
 import { DomLookupError, getButtonById } from './dom';
 
 export type ExportFn = (
@@ -27,6 +28,13 @@ export interface ExportButtonDeps {
   scene: () => Container;
   width: number;
   height: number;
+  /**
+   * Optional `ImageProvider` forwarded to `exportToPDF` so sprites in
+   * the scene appear in the PDF. When omitted the PDF renderer's sprite
+   * branch is a no-op (matches the on-screen behaviour when no provider
+   * is wired up).
+   */
+  imageProvider?: ImageProvider;
 }
 
 export interface ExportButtonOptions {
@@ -99,11 +107,15 @@ interface RunExportArgs {
 async function runExport(args: RunExportArgs): Promise<void> {
   const { exportFn, triggerDownload, fileName, onStatus, deps } = args;
   try {
+    const exportOptions: ExportToPDFOptions | undefined = deps.imageProvider
+      ? { imageProvider: deps.imageProvider }
+      : undefined;
     const blob = await exportFn(
       deps.canvasKit,
       deps.scene(),
       deps.width,
       deps.height,
+      exportOptions,
     );
     triggerDownload(blob, fileName);
     onStatus?.(`PDF ready — ${fileName}`);

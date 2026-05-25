@@ -68,6 +68,7 @@ export async function start(): Promise<App> {
       scene: () => app.currentScene,
       width: CANVAS_WIDTH,
       height: CANVAS_HEIGHT,
+      imageProvider: app.imageProvider,
     },
     {
       onStatus: status ? (text) => status.message(text) : undefined,

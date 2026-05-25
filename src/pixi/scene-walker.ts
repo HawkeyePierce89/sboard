@@ -16,6 +16,27 @@ export interface SkiaSpriteNode {
   texture: Texture;
   width: number;
   height: number;
+  /**
+   * Pixi applies the sprite's anchor at draw time (origin shifts by
+   * `-anchor * size`), so the walker stores it on the node so the Skia
+   * renderer and the Skia-side hit-test can mirror that shift in local
+   * space — otherwise an `anchor.set(0.5)` sprite would be offset by
+   * `+w/2, +h/2` relative to its Pixi rendering.
+   */
+  anchor: { x: number; y: number };
+  /**
+   * Multiplied alpha along the ancestor chain (same value the walker
+   * multiplies into graphics-command alphas). The renderer applies it
+   * via `Paint.setAlphaf` so sprites with ancestor or self `alpha < 1`
+   * render translucently — matching PIXI's canvas renderer.
+   */
+  worldAlpha: number;
+  /**
+   * Numeric RGB tint (0xFFFFFF means "no tint"). Captured from
+   * `Sprite.tintValue` so PIXI's `ColorSource` (string/array/etc.) is
+   * normalized to a comparable integer.
+   */
+  tint: number;
   source: DisplayObject;
 }
 
@@ -42,7 +63,13 @@ function applyAlphaToCommands(
 }
 
 function walkNode(obj: DisplayObject, parentAlpha: number): SkiaSceneNode | null {
-  if (!obj.visible) return null;
+  // Pixi's canvas renderer suppresses a subtree when either `visible` OR
+  // `renderable` is false (see @pixi/canvas-display Container.renderCanvas).
+  // Mirroring that here keeps the Skia path in lockstep with what Pixi
+  // actually draws — without the `renderable` check, an object hidden
+  // via `renderable=false` would still appear (and be hit-testable) on
+  // the Skia canvas while Pixi silently dropped it.
+  if (!obj.visible || !obj.renderable) return null;
 
   const worldAlpha = parentAlpha * obj.alpha;
   const matrix = getWorldMatrix(obj);
@@ -64,6 +91,9 @@ function walkNode(obj: DisplayObject, parentAlpha: number): SkiaSceneNode | null
       texture: sprite.texture,
       width: sprite.width,
       height: sprite.height,
+      anchor: { x: sprite.anchor.x, y: sprite.anchor.y },
+      worldAlpha,
+      tint: sprite.tintValue,
       source: obj,
     };
   }
@@ -86,7 +116,7 @@ function walkNode(obj: DisplayObject, parentAlpha: number): SkiaSceneNode | null
 }
 
 export function walkContainer(root: Container): SkiaSceneNode {
-  if (!root.visible) {
+  if (!root.visible || !root.renderable) {
     return {
       type: 'group',
       matrix: getWorldMatrix(root),
