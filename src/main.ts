@@ -118,5 +118,13 @@ if (
   typeof document !== 'undefined' &&
   document.getElementById('pixi-canvas') !== null
 ) {
-  void start();
+  start().catch((err: unknown) => {
+    // Surface boot failures (e.g. CanvasKit fetch/init errors) in the
+    // status log so the user sees something other than a blank Skia
+    // canvas. Console-log too so devtools shows the full stack.
+    const message = err instanceof Error ? err.message : String(err);
+    const log = document.getElementById('status-log');
+    if (log) log.textContent = `Failed to start: ${message}`;
+    console.error('sboard: failed to start', err);
+  });
 }
