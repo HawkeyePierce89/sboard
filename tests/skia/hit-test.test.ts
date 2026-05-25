@@ -197,6 +197,28 @@ describe('hitTest — polylines (stroked)', () => {
     expect(hitTest(node, 50, 50)).toBe(g);
     expect(hitTest(node, 150, 50)).toBeNull();
   });
+
+  it('hits inside a filled OPEN polyline — Canvas2D / Skia fill auto-closes', () => {
+    // `beginFill().moveTo().lineTo()...endFill()` produces a Polygon
+    // with `closeStroke === false`, so no explicit `closePath` is
+    // emitted. Pixi's canvas renderer and Skia both still fill the
+    // subpath as if closed (the implicit-close-on-fill rule), so the
+    // shape's interior must be hit-testable. The `endEntry` boundary
+    // is what triggers the point-in-polygon fall-through.
+    const g = new Graphics();
+    const node = buildGraphicsNode(g, [1, 0, 0, 1, 0, 0], [
+      { type: 'fill', color: 0x00ffff, alpha: 1 },
+      { type: 'moveTo', x: 0, y: 0 },
+      { type: 'lineTo', x: 100, y: 0 },
+      { type: 'lineTo', x: 100, y: 100 },
+      { type: 'lineTo', x: 0, y: 100 },
+      // NO closePath — Polygon.closeStroke was false.
+      { type: 'endEntry' },
+    ]);
+
+    expect(hitTest(node, 50, 50)).toBe(g);
+    expect(hitTest(node, 200, 200)).toBeNull();
+  });
 });
 
 describe('hitTest — z-ordering (top child wins)', () => {

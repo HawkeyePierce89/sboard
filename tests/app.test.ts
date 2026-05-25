@@ -436,15 +436,17 @@ describe('App — DOM listeners on the Skia canvas', () => {
     return canvas;
   }
 
-  it('attaches mousedown/mouseup listeners when skiaCanvas is provided', () => {
+  it('attaches pointerdown/pointerup listeners when skiaCanvas is provided', () => {
     const canvas = makeCanvasAt(0, 0, 500, 400);
     const spy = vi.spyOn(canvas, 'addEventListener');
 
     buildApp({ skiaCanvas: canvas });
 
     const kinds = spy.mock.calls.map((c) => c[0]);
-    expect(kinds).toContain('mousedown');
-    expect(kinds).toContain('mouseup');
+    // Pointer Events cover mouse / touch / pen uniformly, so the Skia
+    // canvas matches PIXI v7's native pointer wiring on mobile too.
+    expect(kinds).toContain('pointerdown');
+    expect(kinds).toContain('pointerup');
   });
 
   it('does NOT attach listeners when skiaCanvas is omitted', () => {
@@ -455,7 +457,7 @@ describe('App — DOM listeners on the Skia canvas', () => {
     expect(app.skiaCanvas).toBeUndefined();
   });
 
-  it('dispatches pointerdown on the hit object when the user clicks the Skia canvas', () => {
+  it('dispatches pointerdown on the hit object when the user taps the Skia canvas', () => {
     const canvas = makeCanvasAt(0, 0, 500, 400);
     const scene = new Container();
     const target = new Graphics();
@@ -466,7 +468,10 @@ describe('App — DOM listeners on the Skia canvas', () => {
 
     buildApp({ initialScene: scene, skiaCanvas: canvas });
 
-    const event = new MouseEvent('mousedown', {
+    // jsdom doesn't ship a PointerEvent constructor, so synthesize one
+    // via a MouseEvent retagged as `pointerdown` (PointerEvent extends
+    // MouseEvent, and our handler only reads clientX/Y).
+    const event = new MouseEvent('pointerdown', {
       bubbles: true,
       clientX: 75,
       clientY: 75,
@@ -488,12 +493,12 @@ describe('App — DOM listeners on the Skia canvas', () => {
     buildApp({ initialScene: scene, skiaCanvas: canvas });
 
     // clientX=250, clientY=150 ⇒ canvas-local (50, 50), inside the rect.
-    canvas.dispatchEvent(new MouseEvent('mouseup', { clientX: 250, clientY: 150 }));
+    canvas.dispatchEvent(new MouseEvent('pointerup', { clientX: 250, clientY: 150 }));
     expect(listener).toHaveBeenCalledTimes(1);
 
     // clientX=199 (just left of the canvas) ⇒ local (-1, 0), outside.
     listener.mockClear();
-    canvas.dispatchEvent(new MouseEvent('mouseup', { clientX: 199, clientY: 150 }));
+    canvas.dispatchEvent(new MouseEvent('pointerup', { clientX: 199, clientY: 150 }));
     expect(listener).not.toHaveBeenCalled();
   });
 });

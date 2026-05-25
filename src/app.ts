@@ -31,11 +31,13 @@ export interface AppOptions {
    */
   backgroundColor?: number;
   /**
-   * Optional DOM canvas to attach mouse listeners on. When provided,
-   * `mousedown` / `mouseup` events trigger a hit-test against the
+   * Optional DOM canvas to attach pointer listeners on. When provided,
+   * `pointerdown` / `pointerup` events trigger a hit-test against the
    * current scene and emit synthetic `pointerdown` / `pointerup` events
    * on the matched `DisplayObject` — mirroring the Pixi canvas wiring
-   * so the same handlers fire whichever canvas the user clicks on.
+   * so the same handlers fire whichever canvas the user clicks/taps on.
+   * Pointer events (rather than mouse events) cover touch and pen input
+   * in addition to mouse, matching PIXI v7's native pointer listeners.
    */
   skiaCanvas?: HTMLCanvasElement;
   /**
@@ -129,11 +131,16 @@ export class App {
   }
 
   private attachSkiaPointerListeners(canvas: HTMLCanvasElement): void {
-    canvas.addEventListener('mousedown', (event) => {
+    // Use Pointer Events (rather than Mouse Events) so touch and pen
+    // input dispatch the same `pointerdown` / `pointerup` synthetic
+    // events as mouse input — matches PIXI v7's native pointer wiring
+    // on the Pixi canvas so both backends behave identically on
+    // mobile / tablet hardware.
+    canvas.addEventListener('pointerdown', (event) => {
       const { x, y } = canvasEventToScene(event, canvas);
       this.dispatchSkiaPointerEvent('pointerdown', x, y);
     });
-    canvas.addEventListener('mouseup', (event) => {
+    canvas.addEventListener('pointerup', (event) => {
       const { x, y } = canvasEventToScene(event, canvas);
       this.dispatchSkiaPointerEvent('pointerup', x, y);
     });
@@ -141,10 +148,10 @@ export class App {
 }
 
 /**
- * Translate a DOM `MouseEvent` into scene-space coordinates relative to
- * the canvas. Uses `getBoundingClientRect()` rather than `offsetX/Y` so
- * the math is independent of `devicePixelRatio` — the scene operates in
- * CSS pixels.
+ * Translate a DOM `MouseEvent` (or `PointerEvent`, which extends it)
+ * into scene-space coordinates relative to the canvas. Uses
+ * `getBoundingClientRect()` rather than `offsetX/Y` so the math is
+ * independent of `devicePixelRatio` — the scene operates in CSS pixels.
  */
 export function canvasEventToScene(
   event: MouseEvent,

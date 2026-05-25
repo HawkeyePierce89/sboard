@@ -108,11 +108,24 @@ function hitGraphics(node: SkiaGraphicsNode, p: Point): boolean {
     }
 
     if (cmd.type === 'endEntry') {
-      // Mirrors the renderer's `endEntry` handling: clear both paint
-      // slots and geometry so the next graphicsData entry starts fresh.
-      // Without this, a fill/stroke set in entry N would still be
-      // "active" while we test commands from entry N+1 that omit the
-      // corresponding style command.
+      // Pixi's canvas renderer (and Skia's path fill) treats an open
+      // polyline as implicitly closed for the fill computation —
+      // `ctx.fill()` / `drawPath(path, fill)` close the subpath even
+      // when no explicit `closePath` was emitted. So a polyline built
+      // via `beginFill().moveTo().lineTo()...endFill()` (closeStroke
+      // false) is visually a filled polygon and must be hit-testable
+      // as one. Mirror that here before resetting the entry state.
+      if (
+        s.fillActive &&
+        s.polyVerts.length >= 3 &&
+        pointInPolygon(p, s.polyVerts)
+      ) {
+        return true;
+      }
+      // Clear both paint slots and geometry so the next graphicsData
+      // entry starts fresh. Without this, a fill/stroke set in entry N
+      // would still be "active" while we test commands from entry N+1
+      // that omit the corresponding style command.
       s.fillActive = false;
       s.strokeActive = false;
       s.strokeWidth = 0;
