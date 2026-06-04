@@ -39,10 +39,10 @@ But `npm run build:canvaskit` is a whole pipeline (host wrapper -> docker build 
 **Files:**
 - Modify: `docker/canvaskit-build/build.sh`
 
-- [ ] Add the line to the gn args block: `extra_cflags_c=["-isystem", "/workspace/skia/third_party/externals/zlib"]`
-- [ ] Start a throwaway container from the `canvaskit-pdf:latest` image (`docker run --rm -it --entrypoint bash`) and verify that `third_party/externals/zlib/zlib.h` exists after git-sync-deps
-- [ ] In that same container, run only `bin/gn gen out/canvaskit --args='...'` with the new line and confirm gen passes without args parsing errors (the string array is valid, no trailing-comma error)
-- [ ] Compile only the offending unit (`ninja -C out/canvaskit obj/third_party/externals/freetype/src/gzip/libfreetype2.ftgzip.o`) and confirm the `'zlib.h' file not found` error is gone
+- [x] Add the line to the gn args block: `extra_cflags_c=["-isystem", "/workspace/skia/third_party/externals/zlib"]`
+- [x] Start a throwaway container from the `canvaskit-pdf:latest` image (`docker run --rm -it --entrypoint bash`) and verify that `third_party/externals/zlib/zlib.h` exists after git-sync-deps (verified: zlib.h present, 96750 bytes)
+- [x] In that same container, run only `bin/gn gen out/canvaskit --args='...'` with the new line and confirm gen passes without args parsing errors (the string array is valid, no trailing-comma error) (verified: gen done, 108 targets, no parse error; only a pre-existing no-op warning on skia_enable_paragraph)
+- [x] Compile only the offending unit (`ninja -C out/canvaskit obj/third_party/externals/freetype/src/gzip/libfreetype2.ftgzip.o`) and confirm the `'zlib.h' file not found` error is gone (verified: ftgzip.c compiled OK)
 
 ### Task 2: Run the whole command and resolve errors at any stage until full completion
 

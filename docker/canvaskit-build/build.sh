@@ -25,6 +25,7 @@ bin/gn gen "${OUT_DIR}" --args='
     skia_use_zlib=true
     skia_use_libpng_decode=true
     skia_use_libjpeg_turbo_decode=false
+    extra_cflags_c=["-isystem", "/workspace/skia/third_party/externals/zlib"]
     target_cpu="wasm"
     cc="emcc"
     cxx="em++"
