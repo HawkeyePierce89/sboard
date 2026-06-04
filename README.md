@@ -214,7 +214,7 @@ returns a ready-to-use `App`.
 
   The decision to ship a stock build by default is documented inline as
   "Plan B" in the implementation plan
-  (`docs/plans/2026-05-24-pixi-skia-pdf-renderer.md`, Task 2).
+  (`docs/plans/completed/2026-05-24-pixi-skia-pdf-renderer.md`, Task 2).
 
 - **GitHub Actions does not rebuild CanvasKit.** The deploy workflow simply
   copies `public/canvaskit/` through `vite build`, so the deployed site

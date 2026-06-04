@@ -74,7 +74,7 @@ the PDF backend — the "Export to PDF" button will fail until you run
 build.
 
 This matches the fallback explicitly allowed by the implementation plan
-(see `docs/plans/2026-05-24-pixi-skia-pdf-renderer.md`, Task 2 ⚠️ note).
+(see `docs/plans/completed/2026-05-24-pixi-skia-pdf-renderer.md`, Task 2 ⚠️ note).
 
 ## Troubleshooting
 
