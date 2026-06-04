@@ -66,10 +66,10 @@ But `npm run build:canvaskit` is a whole pipeline (host wrapper -> docker build 
 **Files:**
 - Inspect: `public/canvaskit/` (build output)
 
-- [ ] Confirm the container printed "CanvasKit build complete" and the host wrapper reached artifact listing without errors
-- [ ] Check that `public/canvaskit/canvaskit.js` and `public/canvaskit/canvaskit.wasm` are created and non-zero size
-- [ ] Sanity check: the first bytes of `canvaskit.wasm` are the `\0asm` signature; `canvaskit.js` is non-empty
-- [ ] Run `npm test` to confirm the build-script edits did not break anything in the repository
+- [x] Confirm the container printed "CanvasKit build complete" and the host wrapper reached artifact listing without errors (verified via Task 2 final run: EXIT_CODE=0, no errors)
+- [x] Check that `public/canvaskit/canvaskit.js` and `public/canvaskit/canvaskit.wasm` are created and non-zero size (canvaskit.js 106445 bytes, canvaskit.wasm 6230404 bytes)
+- [x] Sanity check: the first bytes of `canvaskit.wasm` are the `\0asm` signature; `canvaskit.js` is non-empty (wasm magic 0061736d confirmed; js non-empty)
+- [x] Run `npm test` to confirm the build-script edits did not break anything in the repository (vitest: 224 passed, 1 skipped, 0 failed)
 
 ### Task 4: Verify acceptance criteria
 
