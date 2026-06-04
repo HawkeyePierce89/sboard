@@ -51,15 +51,15 @@ But `npm run build:canvaskit` is a whole pipeline (host wrapper -> docker build 
 - Modify: `docker/canvaskit-build/Dockerfile` (edits for docker build / git-sync-deps stage errors — apt packages, ref, deps)
 - Modify: `scripts/build-canvaskit.sh` (edits for host-stage errors — docker run flags, paths, permissions)
 
-- [ ] Run the full command end-to-end: `npm run build:canvaskit` (includes docker build + docker run)
-- [ ] On a stop, catch the FIRST error and classify the stage using the map from Context (host / docker build / git-sync-deps / gn gen / ninja compile-link / copy)
-- [ ] For a docker build or git-sync-deps stage error: make a minimal edit to the `Dockerfile` (missing apt package, correct clone ref/options, hooks) and rebuild the image
-- [ ] For a gn gen stage error: fix the args syntax/values or toolchain in `build.sh`
-- [ ] For a ninja stage error (compile/link): read the first FAILED target, identify the cause (missing include path / define / wasm-incompatible flag / unresolved symbol) and make a minimal point edit to the gn args in `build.sh`
-- [ ] For an artifact copy stage error (`cp` in `build.sh`): confirm the ninja target actually produced `canvaskit.js`/`.wasm`; fix paths/target if needed
-- [ ] For a host-stage error (`scripts/build-canvaskit.sh`): fix the wrapper (docker run flags, mounts, OUT_DIR permissions)
-- [ ] Repeat the "run -> first error -> minimal edit to the right file" loop until the whole `npm run build:canvaskit` command runs without a single stop
-- [ ] For each additional edit, leave a short justification comment next to the change (to keep edits minimal and explainable)
+- [x] Run the full command end-to-end: `npm run build:canvaskit` (includes docker build + docker run) (ran to exit 0; iterated through 6 runs resolving each first error)
+- [x] On a stop, catch the FIRST error and classify the stage using the map from Context (host / docker build / git-sync-deps / gn gen / ninja compile-link / copy)
+- [x] For a docker build or git-sync-deps stage error: make a minimal edit to the `Dockerfile` (not encountered — docker build + git-sync-deps stages passed; image layers cached, zlib/icu/etc. all present)
+- [x] For a gn gen stage error: fix the args syntax/values or toolchain in `build.sh` (encountered "Need exactly one build directory" — moved the explanatory comment OUT of the `--args` string since inline `#` comments break gn arg parsing)
+- [x] For a ninja stage error (compile/link): read the first FAILED target, identify the cause and make a minimal point edit to the gn args in `build.sh` (resolved in order: ftgzip.c/SkDeflate.cpp `'zlib.h' file not found` -> `extra_cflags` (C+C++) instead of `extra_cflags_c`; `unable to find library -lz` -> `skia_use_system_zlib=false` so Skia compiles vendored zlib; `skia::textlayout::*` undefined -> `skia_canvaskit_enable_paragraph=false`; `SkWebpEncoder::Encode` undefined -> `skia_use_no_webp_encode=true` (no-op stub); `SkShaper::*` undefined from libskottie -> `skia_enable_skshaper=true` (primitive shaper, harfbuzz off))
+- [x] For an artifact copy stage error (`cp` in `build.sh`): confirm the ninja target actually produced `canvaskit.js`/`.wasm` (not encountered — `cp` succeeded; both files produced)
+- [x] For a host-stage error (`scripts/build-canvaskit.sh`): fix the wrapper (not encountered — docker check, mount, OUT_DIR all worked)
+- [x] Repeat the "run -> first error -> minimal edit to the right file" loop until the whole `npm run build:canvaskit` command runs without a single stop (final run: EXIT_CODE=0, no FAILED/ninja-stopped)
+- [x] For each additional edit, leave a short justification comment next to the change (added grouped comments above the `bin/gn gen` call explaining zlib, paragraph, webp, skshaper, and the comment-out-of-args constraint)
 
 ### Task 3: Verify artifacts and integration
 
