@@ -32,19 +32,24 @@ The wrapper builds the Docker image, runs the build inside it, and copies
   only).
 - **Disk:** ~5-8 GB inside the container during the build (depot_tools,
   Skia checkout, third-party deps, build outputs).
-- **Output size:** `canvaskit.wasm` ~7-9 MB; `canvaskit.js` ~120 KB.
+- **Output size:** `canvaskit.wasm` ~6 MB; `canvaskit.js` ~105 KB.
 
 ## Build flags
 
-See `build.sh`. Key flags:
+See `build.sh` (which carries inline comments explaining the less-obvious
+flags). Key flags:
 
 | Flag | Why |
 | --- | --- |
 | `skia_enable_pdf=true` | The whole point — enables `SkPDF::MakeDocument`. |
 | `skia_use_freetype=true` | Text glyph rasterisation/embedding for PDF. |
 | `skia_use_harfbuzz=false` | No complex text shaping needed; cuts size. |
-| `skia_enable_skshaper=false`, `skia_enable_paragraph=false` | Same as above. |
+| `skia_enable_skshaper=true` | skottie's `TextShaper` references `SkShaper::Make`; with harfbuzz off this builds only the primitive backend (matches the canonical canvaskit build). |
+| `skia_enable_paragraph=false`, `skia_canvaskit_enable_paragraph=false` | No paragraph layout; the second flag stops canvaskit compiling `paragraph_bindings.cpp` (undefined `skia::textlayout::*`). |
 | `skia_use_zlib=true` | Required for PDF stream compression. |
+| `skia_use_system_zlib=false` | No system zlib in the wasm sysroot — the official-build default `true` emits a bare `-lz` wasm-ld can't resolve. `false` compiles Skia's vendored zlib from source. |
+| `extra_cflags=["-isystem", ".../externals/zlib"]` | The m120 `freetype2/BUILD.gn` does not propagate the zlib include into units compiled with `-DFT_CONFIG_OPTION_SYSTEM_ZLIB` (`ftgzip.c`, `SkDeflate.cpp` both `#include "zlib.h"`). Use `extra_cflags` (C **and** C++), not `extra_cflags_c`. |
+| `skia_use_no_webp_encode=true` | wasm has no real webp encoder, yet `canvaskit_bindings.cpp` calls `SkWebpEncoder::Encode`; this pulls in the no-op stub so the symbol resolves. |
 | `skia_use_libpng_decode=true` | Needed for `PIXI.Sprite` (PNG textures). |
 | `skia_use_libjpeg_turbo_decode=false` | Not used by our scenes; keep size down. |
 | `target_cpu="wasm"` + emscripten toolchain | WebAssembly target. |

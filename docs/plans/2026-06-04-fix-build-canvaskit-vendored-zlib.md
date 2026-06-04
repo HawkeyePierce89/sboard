@@ -80,6 +80,6 @@ But `npm run build:canvaskit` is a whole pipeline (host wrapper -> docker build 
 
 ### Task 5: Update documentation
 
-- [ ] Add a short comment in `docker/canvaskit-build/build.sh` next to `extra_cflags_c` explaining why the zlib include is needed (the propagation bug in the m120 branch's `freetype2/BUILD.gn`)
-- [ ] If Task 2 required additional edits to `build.sh` / `Dockerfile` / `scripts/build-canvaskit.sh` — capture their reasons in comments next to the changes
-- [ ] Update README/CLAUDE.md on the canvaskit build process if needed (if the step order changed or new requirements appeared)
+- [x] Add a short comment in `docker/canvaskit-build/build.sh` next to `extra_cflags_c` explaining why the zlib include is needed (the propagation bug in the m120 branch's `freetype2/BUILD.gn`) (present at build.sh:22-27: the m120 freetype2/BUILD.gn does not propagate the zlib include into units compiled with -DFT_CONFIG_OPTION_SYSTEM_ZLIB)
+- [x] If Task 2 required additional edits to `build.sh` / `Dockerfile` / `scripts/build-canvaskit.sh` — capture their reasons in comments next to the changes (all Task 2 edits were to build.sh only; reasons for skia_use_system_zlib, skshaper, paragraph, webp and the comments-out-of-args constraint documented at build.sh:16-43)
+- [x] Update README/CLAUDE.md on the canvaskit build process if needed (if the step order changed or new requirements appeared) (no CLAUDE.md; updated docker/canvaskit-build/README.md "Build flags" table to match the final flags — skshaper=true, system_zlib=false, canvaskit_enable_paragraph=false, no_webp_encode=true, extra_cflags — and corrected the output-size estimate)
