@@ -13,6 +13,17 @@ cd /workspace/skia
 
 OUT_DIR="out/canvaskit"
 
+# SCOPE NOTE — skia_enable_pdf only builds the Skia *C++* PDF backend
+# (SkPDF::MakeDocument). It does NOT add a CanvasKit *JS* binding: stock
+# modules/canvaskit/canvaskit_bindings.cpp has no MakePDFDocument export, so the
+# canvaskit.js this build produces still does not expose one. Wiring the JS
+# binding is a separate step (derive an SkWStream into a Uint8Array and add an
+# EMSCRIPTEN_BINDINGS entry in canvaskit_bindings.cpp — "Task 8a" in
+# docs/plans/completed/2026-05-24-pixi-skia-pdf-renderer.md), which is NOT done
+# here. Until it is, exportToPDF() correctly throws PDFExportNotSupportedError.
+# This script's job is only to make `npm run build:canvaskit` complete and emit
+# valid artifacts with the PDF backend compiled in.
+#
 # zlib notes (there is no system zlib in the emscripten wasm sysroot):
 #  * skia_use_system_zlib=false: the official-build default is true, which makes
 #    third_party/zlib/BUILD.gn emit system("zlib"){libs=["z"]} -> a bare -lz at
