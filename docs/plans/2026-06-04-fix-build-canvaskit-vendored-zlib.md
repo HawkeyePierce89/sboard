@@ -73,10 +73,10 @@ But `npm run build:canvaskit` is a whole pipeline (host wrapper -> docker build 
 
 ### Task 4: Verify acceptance criteria
 
-- [ ] Clean from-scratch run: `npm run build:canvaskit` finishes with exit code 0 from the first to the last command
-- [ ] No stop at any stage: no "ninja: build stopped: subcommand failed", no failed docker build / git-sync-deps / gn gen / cp / host-wrapper steps
-- [ ] Artifacts present in `public/canvaskit/` (both files, non-zero)
-- [ ] `npm test` passes
+- [x] Clean from-scratch run: `npm run build:canvaskit` finishes with exit code 0 from the first to the last command (verified: fresh run reached [1686/1686] stamp, "CanvasKit build complete", EXIT_CODE=0)
+- [x] No stop at any stage: no "ninja: build stopped: subcommand failed", no failed docker build / git-sync-deps / gn gen / cp / host-wrapper steps (verified: log grep for ninja-stopped/FAILED/error returned nothing)
+- [x] Artifacts present in `public/canvaskit/` (both files, non-zero) (canvaskit.js 106445 bytes, canvaskit.wasm 6230404 bytes; wasm `\0asm` magic confirmed)
+- [x] `npm test` passes (vitest: 224 passed, 1 skipped, 0 failed)
 
 ### Task 5: Update documentation
 
