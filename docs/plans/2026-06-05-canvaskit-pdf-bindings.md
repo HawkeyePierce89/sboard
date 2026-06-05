@@ -58,11 +58,11 @@ The provided `getOutput()` builds a `typed_memory_view` over `sk_sp<SkData> data
 
 **Files:** Modify `docker/canvaskit-build/build.sh`, `docker/canvaskit-build/README.md`, `src/skia/pdf-exporter.ts`, `src/skia/types.ts`
 
-- [ ] Remove/replace the `build.sh` "SCOPE NOTE" that says the JS binding is not added (it now is, via the patch)
-- [ ] Update `README.md` ⚠️ notes and "Current state" section to state the patch now exports `MakePDFDocument`, and document `canvaskit-pdf-bindings.patch` (purpose + how `git apply` runs in the Dockerfile)
-- [ ] Update the `hasPDFSupport` docstring and `PDFExportNotSupportedError` message in `pdf-exporter.ts`, and the comments in `types.ts`, so they no longer claim "no build exposes" the binding (keep behavior: still throws if a stock/unpatched build is loaded)
-- [ ] run `npm test` — existing pdf-exporter suite (incl. the soft-skip integration smoke) must still pass unchanged
-- [ ] run `npm run typecheck` and `npm run lint` — must pass
+- [x] Remove/replace the `build.sh` "SCOPE NOTE" that says the JS binding is not added (it now is, via the patch) — replaced with a "PDF JS binding" note pointing to `canvaskit-pdf-bindings.patch`
+- [x] Update `README.md` ⚠️ notes and "Current state" section to state the patch now exports `MakePDFDocument`, and document `canvaskit-pdf-bindings.patch` (purpose + how `git apply` runs in the Dockerfile) — added a dedicated "`canvaskit-pdf-bindings.patch`" section, softened the top note to ℹ️, updated the flags table and "Current state" (with a ⚠️ that the committed artifacts predate the patch and need a rebuild)
+- [x] Update the `hasPDFSupport` docstring and `PDFExportNotSupportedError` message in `pdf-exporter.ts`, and the comments in `types.ts`, so they no longer claim "no build exposes" the binding (keep behavior: still throws if a stock/unpatched build is loaded) — also refreshed the stale `getOutput()` "Task 8" comment in `types.ts`
+- [x] run `npm test` — existing pdf-exporter suite (incl. the soft-skip integration smoke) must still pass unchanged — 224 passed, 1 skipped
+- [x] run `npm run typecheck` and `npm run lint` — must pass — both clean
 
 ### Task 5: Verify acceptance criteria (automatable portion)
 

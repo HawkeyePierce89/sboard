@@ -1,22 +1,43 @@
 # CanvasKit (PDF-enabled) Docker build
 
 Builds CanvasKit (Skia's WebAssembly canvas API) with the Skia C++ PDF backend
-(`skia_enable_pdf=true`) compiled in. This is a **prerequisite** for the
-"Export to PDF" feature of sboard, but not sufficient on its own (see below).
+(`skia_enable_pdf=true`) compiled in **and** the `MakePDFDocument` JavaScript
+binding exposed via `canvaskit-pdf-bindings.patch`. Together these power the
+"Export to PDF" feature of sboard.
 
 The official `canvaskit-wasm` npm package ships **without** the PDF backend, so
 this custom build is required.
 
-> ⚠️ **`skia_enable_pdf=true` does not by itself expose `MakePDFDocument` to
-> JavaScript.** It only builds Skia's C++ `SkPDF::MakeDocument`. Stock
-> `modules/canvaskit/canvaskit_bindings.cpp` has no PDF binding, so the
-> `canvaskit.js` this build produces still does not export `MakePDFDocument` /
-> `_MakePDFDocument`. Exposing it requires patching `canvaskit_bindings.cpp`
-> (derive an `SkWStream` into a `Uint8Array` and add an `EMSCRIPTEN_BINDINGS`
-> entry) and rebuilding — the deferred "Task 8a" in
-> `docs/plans/completed/2026-05-24-pixi-skia-pdf-renderer.md`. Until that lands,
-> `exportToPDF()` raises `PDFExportNotSupportedError` (by design) even against
-> this PDF-backend build.
+> ℹ️ **`skia_enable_pdf=true` alone does not expose `MakePDFDocument` to
+> JavaScript** — it only builds Skia's C++ `SkPDF::MakeDocument`. Stock
+> `modules/canvaskit/canvaskit_bindings.cpp` has no PDF binding. This build
+> closes that gap with `canvaskit-pdf-bindings.patch` (see below), which adds a
+> `JsPDFDocument` wrapper and a `MakePDFDocument` `EMSCRIPTEN_BINDINGS` entry to
+> `canvaskit_bindings.cpp`. The resulting `canvaskit.js` **does** export
+> `MakePDFDocument` / `_MakePDFDocument`, so `exportToPDF()` produces a real
+> PDF. `PDFExportNotSupportedError` now only fires if a stock/unpatched
+> `canvaskit.js` is loaded instead of this build's artifacts.
+
+## `canvaskit-pdf-bindings.patch`
+
+A committed git-diff against Skia's `modules/canvaskit/canvaskit_bindings.cpp`
+at `chrome/m120`. It adds:
+
+- `#include "include/docs/SkPDFDocument.h"`;
+- a `JsPDFDocument` C++ wrapper (an `SkDynamicMemoryWStream` sink, the
+  `sk_sp<SkDocument>` from `SkPDF::MakeDocument`, and an `sk_sp<SkData>` member
+  that keeps the detached output buffer alive so `getOutput()` can return a
+  live `Uint8Array` view);
+- an `EMSCRIPTEN_BINDINGS(Skia)` entry exposing `MakePDFDocument` plus the
+  document's `beginPage` / `endPage` / `close` / `getOutput` methods.
+
+No `BUILD.gn` patch is needed: `SkPDF::MakeDocument` links transitively through
+canvaskit's existing `../..:skia` dependency once `skia_enable_pdf=true` (the
+top-level `:pdf` target is in `skia`'s `public_deps`).
+
+The Dockerfile applies it with `git apply` immediately after the Skia clone +
+`tools/git-sync-deps` (deps sync never touches `modules/canvaskit/`, so the
+application is deterministic).
 
 ## How to run
 
@@ -52,7 +73,7 @@ flags). Key flags:
 
 | Flag | Why |
 | --- | --- |
-| `skia_enable_pdf=true` | Compiles Skia's C++ `SkPDF::MakeDocument` backend. Necessary but **not** sufficient — the JS `MakePDFDocument` binding must still be added in `canvaskit_bindings.cpp` (see the ⚠️ note at the top). |
+| `skia_enable_pdf=true` | Compiles Skia's C++ `SkPDF::MakeDocument` backend. The JS `MakePDFDocument` binding is added on top by `canvaskit-pdf-bindings.patch` (see the note at the top). |
 | `skia_use_freetype=true` | Text glyph rasterisation/embedding for PDF. |
 | `skia_use_harfbuzz=false` | No complex text shaping needed; cuts size. |
 | `skia_enable_skshaper=true` | skottie's `TextShaper` references `SkShaper::Make`; with harfbuzz off this builds only the primitive backend (matches the canonical canvaskit build). |
@@ -79,17 +100,18 @@ docker build --build-arg SKIA_REF=chrome/m130 -t canvaskit-pdf:latest \
 
 `public/canvaskit/canvaskit.{js,wasm}` are committed so the project is usable
 without running the heavy Docker build. They are the artifacts of **this**
-PDF-backend build (`skia_enable_pdf=true`), produced by `npm run build:canvaskit`.
+PDF-backend build (`skia_enable_pdf=true` + `canvaskit-pdf-bindings.patch`),
+produced by `npm run build:canvaskit`.
 
-**The "Export to PDF" button still fails** with `PDFExportNotSupportedError`,
-because — as the ⚠️ note above explains — the committed `canvaskit.js` does not
-export `MakePDFDocument`. Enabling Export to PDF requires the additional
-`canvaskit_bindings.cpp` JS-binding patch (deferred "Task 8a") followed by a
-rebuild; rebuilding with the current `build.sh` alone will **not** change this.
+Once those artifacts are regenerated from this build, the committed
+`canvaskit.js` exports `MakePDFDocument` and the "Export to PDF" button produces
+a real vector PDF. `PDFExportNotSupportedError` only surfaces if a
+stock/unpatched `canvaskit.js` is swapped in.
 
-This matches the fallback explicitly allowed by the implementation plan
-(see `docs/plans/completed/2026-05-24-pixi-skia-pdf-renderer.md`, Task 2 ⚠️ note
-and Task 8a).
+> ⚠️ The currently-committed artifacts predate the patch; regenerate them with
+> `npm run build:canvaskit` (a ~30–60 min Docker rebuild) to pick up the
+> `MakePDFDocument` binding. See **Post-Completion** in
+> `docs/plans/2026-06-05-canvaskit-pdf-bindings.md`.
 
 ## Troubleshooting
 

@@ -10,13 +10,12 @@ export interface ExportToPDFOptions {
 }
 
 /**
- * Type-guard: no CanvasKit build in this repo currently exposes the PDF
- * backend to JavaScript. Neither the stock `canvaskit-wasm@0.41.x` package
- * nor the custom `docker/canvaskit-build` image (compiled with
- * `skia_enable_pdf=true`) defines `MakePDFDocument` — that flag only builds
- * Skia's C++ `SkPDF::MakeDocument`; the JS binding must still be added to
- * `canvaskit_bindings.cpp` and the module rebuilt. Callers use this to fail
- * fast with a user-visible error rather than crashing inside CanvasKit.
+ * Type-guard: whether the loaded CanvasKit exposes the PDF backend to
+ * JavaScript. The custom `docker/canvaskit-build` image defines
+ * `MakePDFDocument` via `canvaskit-pdf-bindings.patch` (on top of
+ * `skia_enable_pdf=true`); the stock `canvaskit-wasm@0.41.x` package does not.
+ * Callers use this to fail fast with a user-visible error — rather than
+ * crashing inside CanvasKit — when a stock/unpatched build is loaded.
  */
 export function hasPDFSupport(
   canvasKit: CanvasKit,
@@ -30,9 +29,10 @@ export function hasPDFSupport(
 export class PDFExportNotSupportedError extends Error {
   constructor() {
     super(
-      'CanvasKit build does not expose MakePDFDocument — the JS PDF binding ' +
-        'must be added to canvaskit_bindings.cpp and CanvasKit rebuilt ' +
-        '(see docker/canvaskit-build/README.md). Note: skia_enable_pdf=true ' +
+      'CanvasKit build does not expose MakePDFDocument — a stock or ' +
+        'unpatched canvaskit.js is loaded. Rebuild with the PDF JS binding ' +
+        'via `npm run build:canvaskit` (applies canvaskit-pdf-bindings.patch; ' +
+        'see docker/canvaskit-build/README.md). Note: skia_enable_pdf=true ' +
         'alone is not sufficient.',
     );
     this.name = 'PDFExportNotSupportedError';
@@ -52,9 +52,9 @@ export class PDFExportNotSupportedError extends Error {
  *   4. `endPage()` finalizes the page, `close()` writes the trailer.
  *   5. `getOutput()` returns the accumulated bytes (`Uint8Array`).
  *
- * Until the JS PDF binding is added to `canvaskit_bindings.cpp`, this rejects
- * with `PDFExportNotSupportedError` — the caller (UI export button) should
- * surface that to the user.
+ * If a stock/unpatched CanvasKit (no `MakePDFDocument`) is loaded, this throws
+ * `PDFExportNotSupportedError` — the caller (UI export button) should surface
+ * that to the user.
  */
 export async function exportToPDF(
   canvasKit: CanvasKit,

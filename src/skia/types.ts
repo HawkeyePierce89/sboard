@@ -14,11 +14,11 @@ export type { Canvas, Image, Paint, Path, Surface };
  *
  * The shape mirrors `SkPDF::Metadata` (see
  * https://skia.googlesource.com/skia/+/refs/heads/main/include/docs/SkPDFDocument.h).
- * It is reproduced locally because `@types/canvaskit-wasm@0.41.x` does
- * not declare any PDF surface — and no current build exposes one at runtime
- * either: `skia_enable_pdf=true` only compiles Skia's C++ PDF backend, so the
- * JS binding still has to be added to `canvaskit_bindings.cpp` (see
- * docker/canvaskit-build).
+ * It is reproduced locally because `@types/canvaskit-wasm@0.41.x` does not
+ * declare any PDF surface. The runtime binding is provided by the custom
+ * `docker/canvaskit-build` image, which adds `MakePDFDocument` to
+ * `canvaskit_bindings.cpp` via `canvaskit-pdf-bindings.patch` (on top of
+ * `skia_enable_pdf=true`, which only compiles Skia's C++ PDF backend).
  */
 export interface PDFMetadata {
   title?: string;
@@ -34,8 +34,9 @@ export interface PDFDocument {
   endPage(): void;
   close(): void;
   /**
-   * Returns the bytes accumulated so far. The exact name on the JS
-   * binding is confirmed empirically in Task 8 and adjusted here.
+   * Returns the accumulated PDF bytes. Backed by the patch's `JsPDFDocument`,
+   * which detaches the stream into an `sk_sp<SkData>` member and returns a
+   * `typed_memory_view` over it (a live `Uint8Array`).
    */
   getOutput(): Uint8Array;
 }
