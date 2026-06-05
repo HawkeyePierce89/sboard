@@ -66,9 +66,9 @@ The provided `getOutput()` builds a `typed_memory_view` over `sk_sp<SkData> data
 
 ### Task 5: Verify acceptance criteria (automatable portion)
 
-- [ ] run full test suite `npm test` — all pass
-- [ ] run `npm run lint` and `npm run typecheck` — clean
-- [ ] re-run `git apply --check` of the patch against a freshly fetched m120 copy to confirm it is not order/context fragile
+- [x] run full test suite `npm test` — all pass (224 passed, 1 skipped)
+- [x] run `npm run lint` and `npm run typecheck` — clean (both exit 0, no output)
+- [x] re-run `git apply --check` of the patch against a freshly fetched m120 copy to confirm it is not order/context fragile — re-fetched `chrome/m120` `canvaskit_bindings.cpp` (2586 lines), `git apply --check -v` passes and a real `git apply` inserts the PDF symbols cleanly (10 `MakePDFDocument`/`JsPDFDocument` matches), no fuzz
 
 ## Post-Completion
 
