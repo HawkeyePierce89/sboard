@@ -1,0 +1,44 @@
+# canvaskit-pdf-bindings.patch
+#
+# Adds the MakePDFDocument JavaScript binding to CanvasKit by patching Skia's
+# modules/canvaskit/canvaskit_bindings.cpp. Applied during `docker build` via
+# `git apply` (see docker/canvaskit-build/Dockerfile). git apply ignores this
+# leading comment preamble and starts at the first `diff --git` line below.
+#
+# ─────────────────────────────────────────────────────────────────────────────
+# Task 1 findings (Skia pinned at chrome/m120 — same as Dockerfile ARG SKIA_REF)
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# Source fetched: skia.googlesource.com @ chrome/m120
+#   - modules/canvaskit/canvaskit_bindings.cpp (2586 lines)
+#   - modules/canvaskit/BUILD.gn               (393 lines)
+#   - BUILD.gn (top-level)                     (3464 lines)
+#
+# Header include anchor:
+#   include/core/SkData.h   already included (line 19)
+#   include/core/SkStream.h already included (line 39)
+#   => only include/docs/SkPDFDocument.h must be added. SkStream.h is added
+#      defensively/explicitly too (no-op if already present) per the plan, but
+#      the existing #include at line 39 already covers SkDynamicMemoryWStream.
+#
+# Wrapper class insertion anchor:
+#   The free function encodeImage() ends at line 973 ("}"), followed by a blank
+#   line (974), then `EMSCRIPTEN_BINDINGS(Skia) {` at line 975. The JsPDFDocument
+#   wrapper class + MakePDFDocument factory are inserted in that gap, immediately
+#   before the EMSCRIPTEN_BINDINGS block.
+#
+# Bindings registration anchor:
+#   Inside `EMSCRIPTEN_BINDINGS(Skia) {` (opens line 975). class_<JsPDFDocument>
+#   and the MakePDFDocument function are registered within this block.
+#
+# GN PDF target verdict — NO BUILD.gn PATCH NEEDED (Task 2 hunk 4 OMITTED):
+#   - modules/canvaskit/BUILD.gn:98  canvaskit target: deps = [ "../..:skia" ]
+#   - BUILD.gn:1476 (top-level)      skia_component("skia") public_deps += ":pdf"
+#   - BUILD.gn:1223-1224 (top-level) optional("pdf") {
+#                                       enabled = skia_use_zlib && skia_enable_pdf
+#   build.sh already sets skia_use_zlib=true and skia_enable_pdf=true, so the
+#   ":pdf" target (SkPDF::MakeDocument + src/pdf/*) is compiled and linked into
+#   ":skia", which canvaskit already depends on. No explicit `deps += [ ... ]`
+#   hunk against modules/canvaskit/BUILD.gn is required.
+#
+# (Diff hunks are authored in Task 2 below.)

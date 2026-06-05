@@ -31,10 +31,10 @@ The provided `getOutput()` builds a `typed_memory_view` over `sk_sp<SkData> data
 
 **Files:** none committed (scratch only)
 
-- [ ] Fetch `modules/canvaskit/canvaskit_bindings.cpp` and `modules/canvaskit/BUILD.gn` from skia.googlesource.com at `chrome/m120` into a scratch dir (e.g. `/tmp/skia-m120/`) via raw download
-- [ ] Locate the `EMSCRIPTEN_BINDINGS(Skia)` block and a stable insertion anchor in `canvaskit_bindings.cpp`; note exact context lines for the diff
-- [ ] Grep the fetched `BUILD.gn` (and reference the top-level Skia `BUILD.gn` layout) to determine whether `SkPDF::MakeDocument` is folded into the existing `../../:skia` dep (m120 typically compiles `src/pdf` into the core target when `skia_enable_pdf=true`) or requires an explicit `deps += [ "../../:pdf" ]` — record the verdict to decide if the patch touches `BUILD.gn` at all
-- [ ] write a short note of findings into the patch header comment (anchor + GN verdict) for reviewer traceability
+- [x] Fetch `modules/canvaskit/canvaskit_bindings.cpp` and `modules/canvaskit/BUILD.gn` from skia.googlesource.com at `chrome/m120` into a scratch dir (e.g. `/tmp/skia-m120/`) via raw download
+- [x] Locate the `EMSCRIPTEN_BINDINGS(Skia)` block and a stable insertion anchor in `canvaskit_bindings.cpp`; note exact context lines for the diff — `EMSCRIPTEN_BINDINGS(Skia)` opens at line 975; `encodeImage()` ends at line 973 (blank line 974) is the wrapper-class insertion gap; `SkData.h` (line 19) and `SkStream.h` (line 39) are already included so only `include/docs/SkPDFDocument.h` must be added
+- [x] Grep the fetched `BUILD.gn` (and reference the top-level Skia `BUILD.gn` layout) to determine whether `SkPDF::MakeDocument` is folded into the existing `../../:skia` dep (m120 typically compiles `src/pdf` into the core target when `skia_enable_pdf=true`) or requires an explicit `deps += [ "../../:pdf" ]` — VERDICT: no `BUILD.gn` patch needed. Top-level `BUILD.gn:1476` `skia_component("skia")` `public_deps` includes `:pdf`; `BUILD.gn:1224` `optional("pdf")` is `enabled = skia_use_zlib && skia_enable_pdf` (both already true in `build.sh`); canvaskit deps `"../..:skia"` (`modules/canvaskit/BUILD.gn:98`), so `MakeDocument` links transitively. Task 2 hunk 4 omitted.
+- [x] write a short note of findings into the patch header comment (anchor + GN verdict) for reviewer traceability — recorded in `docker/canvaskit-build/canvaskit-pdf-bindings.patch` header preamble
 
 ### Task 2: Author `canvaskit-pdf-bindings.patch`
 
