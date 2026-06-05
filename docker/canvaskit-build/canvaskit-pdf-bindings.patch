@@ -42,3 +42,109 @@
 #   hunk against modules/canvaskit/BUILD.gn is required.
 #
 # (Diff hunks are authored in Task 2 below.)
+
+diff --git a/modules/canvaskit/canvaskit_bindings.cpp b/modules/canvaskit/canvaskit_bindings.cpp
+index a7f0fec..6e378f7 100644
+--- a/modules/canvaskit/canvaskit_bindings.cpp
++++ b/modules/canvaskit/canvaskit_bindings.cpp
+@@ -44,6 +44,7 @@
+ #include "include/core/SkTypeface.h"
+ #include "include/core/SkTypes.h"
+ #include "include/core/SkVertices.h"
++#include "include/docs/SkPDFDocument.h"
+ #include "include/effects/Sk1DPathEffect.h"
+ #include "include/effects/Sk2DPathEffect.h"
+ #include "include/effects/SkCornerPathEffect.h"
+@@ -972,6 +973,54 @@ static Uint8Array encodeImage(GrDirectContext* dContext,
+     return toBytes(data);
+ }
+ 
++// JsPDFDocument bridges Skia's PDF backend (SkPDF::MakeDocument) to JavaScript.
++// It owns the SkDynamicMemoryWStream the document writes into, the SkDocument
++// itself, and -- crucially -- the detached SkData returned by getOutput().
++// Keeping fData as a member means the Uint8Array view handed back to JS stays
++// backed by live memory for the lifetime of this object (the caller copies it
++// into a Blob synchronously before the object is released).
++class JsPDFDocument {
++public:
++    explicit JsPDFDocument(const SkPDF::Metadata& metadata) {
++        fDoc = SkPDF::MakeDocument(&fStream, metadata);
++    }
++
++    // Returns the SkCanvas for the new page (owned by the document), or nullptr
++    // if the document failed to initialize.
++    SkCanvas* beginPage(SkScalar width, SkScalar height) {
++        if (!fDoc) {
++            return nullptr;
++        }
++        return fDoc->beginPage(width, height);
++    }
++
++    void endPage() {
++        if (fDoc) {
++            fDoc->endPage();
++        }
++    }
++
++    void close() {
++        if (fDoc) {
++            fDoc->close();
++        }
++    }
++
++    // Detaches the accumulated PDF bytes and returns a typed_memory_view over
++    // them. fData keeps the buffer alive; close() must be called first.
++    Uint8Array getOutput() {
++        fData = fStream.detachAsData();
++        return emscripten::val(
++            typed_memory_view(fData->size(), fData->bytes())
++        );
++    }
++
++private:
++    SkDynamicMemoryWStream fStream;
++    sk_sp<SkDocument> fDoc;
++    sk_sp<SkData> fData;
++};
++
+ EMSCRIPTEN_BINDINGS(Skia) {
+ #ifdef ENABLE_GPU
+     constant("gpu", true);
+@@ -1084,6 +1133,37 @@ EMSCRIPTEN_BINDINGS(Skia) {
+      }));
+ #endif
+ 
++    class_<JsPDFDocument>("PDFDocument")
++        .function("beginPage", &JsPDFDocument::beginPage, allow_raw_pointers())
++        .function("endPage", &JsPDFDocument::endPage)
++        .function("close", &JsPDFDocument::close)
++        .function("getOutput", &JsPDFDocument::getOutput);
++
++    function("MakePDFDocument", optional_override([](emscripten::val jsMetadata)->JsPDFDocument* {
++        SkPDF::Metadata metadata;
++        if (!jsMetadata.isUndefined() && !jsMetadata.isNull()) {
++            if (!jsMetadata["title"].isUndefined()) {
++                metadata.fTitle = SkString(jsMetadata["title"].as<std::string>().c_str());
++            }
++            if (!jsMetadata["author"].isUndefined()) {
++                metadata.fAuthor = SkString(jsMetadata["author"].as<std::string>().c_str());
++            }
++            if (!jsMetadata["subject"].isUndefined()) {
++                metadata.fSubject = SkString(jsMetadata["subject"].as<std::string>().c_str());
++            }
++            if (!jsMetadata["keywords"].isUndefined()) {
++                metadata.fKeywords = SkString(jsMetadata["keywords"].as<std::string>().c_str());
++            }
++            if (!jsMetadata["creator"].isUndefined()) {
++                metadata.fCreator = SkString(jsMetadata["creator"].as<std::string>().c_str());
++            }
++            if (!jsMetadata["producer"].isUndefined()) {
++                metadata.fProducer = SkString(jsMetadata["producer"].as<std::string>().c_str());
++            }
++        }
++        return new JsPDFDocument(metadata);
++    }), allow_raw_pointers());
++
+     class_<SkAnimatedImage>("AnimatedImage")
+         .smart_ptr<sk_sp<SkAnimatedImage>>("sk_sp<AnimatedImage>")
+         .function("currentFrameDuration", &SkAnimatedImage::currentFrameDuration)

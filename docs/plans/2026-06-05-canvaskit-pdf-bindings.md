@@ -40,11 +40,11 @@ The provided `getOutput()` builds a `typed_memory_view` over `sk_sp<SkData> data
 
 **Files:** Create `docker/canvaskit-build/canvaskit-pdf-bindings.patch`
 
-- [ ] Diff hunk 1 (headers): add `#include "include/docs/SkPDFDocument.h"` and `#include "include/core/SkStream.h"`
-- [ ] Diff hunk 2 (wrapper): add `class JsPDFDocument` with `SkDynamicMemoryWStream fStream`, `std::unique_ptr<SkDocument> fDoc`, **and `sk_sp<SkData> fData` member**; `getOutput()` does `fData = fStream.detachAsData();` then returns a `typed_memory_view` over `fData->data()/size()` (keeps buffer alive → `Uint8Array`)
-- [ ] Diff hunk 3 (bindings): inside `EMSCRIPTEN_BINDINGS(Skia)`, add `class_<JsPDFDocument>("PDFDocument")` with `beginPage/endPage/close/getOutput` and the `MakePDFDocument` `optional_override` reading the metadata `emscripten::val` fields
-- [ ] Diff hunk 4 (GN, conditional): add `deps += [ "../../:pdf" ]` to the canvaskit target **only if** Task 1 proved a separate PDF target exists; otherwise omit this hunk
-- [ ] Verify the patch applies: in the scratch m120 checkout/copy run `git apply --check docker/canvaskit-build/canvaskit-pdf-bindings.patch` — must succeed with no fuzz failures
+- [x] Diff hunk 1 (headers): add `#include "include/docs/SkPDFDocument.h"` (added in the alphabetical `core`→`effects` slot). `#include "include/core/SkStream.h"` was NOT re-added — Task 1 confirmed it is already present at line 39 of the m120 source, so a duplicate include would be redundant; the existing include already covers `SkDynamicMemoryWStream`
+- [x] Diff hunk 2 (wrapper): add `class JsPDFDocument` with `SkDynamicMemoryWStream fStream`, `sk_sp<SkDocument> fDoc` (used `sk_sp`, not `std::unique_ptr` — `SkPDF::MakeDocument` returns `sk_sp<SkDocument>` and `SkDocument` is `SkRefCnt`-based), **and `sk_sp<SkData> fData` member**; `getOutput()` does `fData = fStream.detachAsData();` then returns a `typed_memory_view` over `fData->size()/bytes()` (keeps buffer alive → `Uint8Array`)
+- [x] Diff hunk 3 (bindings): inside `EMSCRIPTEN_BINDINGS(Skia)`, add `class_<JsPDFDocument>("PDFDocument")` with `beginPage/endPage/close/getOutput` and the `MakePDFDocument` `optional_override` reading the metadata `emscripten::val` fields (title/author/subject/keywords/creator/producer → `SkPDF::Metadata` `SkString` fields, each guarded with `isUndefined()`)
+- [x] Diff hunk 4 (GN, conditional): OMITTED — Task 1 verdict proved no separate PDF target patch is needed (`:pdf` links transitively via `../..:skia`)
+- [x] Verify the patch applies: ran `git apply --check -v` (and a real `git apply`) against a freshly fetched `chrome/m120` `canvaskit_bindings.cpp` — succeeds with no fuzz failures (3 inserted symbols confirmed present)
 
 ### Task 3: Wire the patch into the Docker build
 
