@@ -30,7 +30,12 @@ export interface PDFMetadata {
 }
 
 export interface PDFDocument {
-  beginPage(width: number, height: number): Canvas;
+  /**
+   * Starts a new page and returns its `Canvas`, or `null` if the underlying
+   * `SkPDF::MakeDocument` failed to initialize (the patch's `beginPage`
+   * returns `nullptr` in that case).
+   */
+  beginPage(width: number, height: number): Canvas | null;
   endPage(): void;
   close(): void;
   /**
@@ -39,6 +44,12 @@ export interface PDFDocument {
    * `typed_memory_view` over it (a live `Uint8Array`).
    */
   getOutput(): Uint8Array;
+  /**
+   * Frees the underlying C++ `JsPDFDocument`. It is a raw-pointer Embind
+   * object (auto-generated `.delete()`), so JS must call this or the wrapper
+   * and its retained output buffer leak in the WASM heap.
+   */
+  delete(): void;
 }
 
 export interface CanvasKitWithPDF extends CanvasKit {

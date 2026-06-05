@@ -3,9 +3,10 @@
 A small TypeScript web app that builds a scene with [pixi.js](https://pixijs.com/)
 and, in parallel, renders the same scene through a custom TS wrapper on top of
 [Skia / CanvasKit](https://skia.org/docs/user/modules/canvaskit/). The Skia
-scene is wired to export to a real vector PDF via Skia's PDF backend — though
-the bundled CanvasKit build does not yet expose that backend to JavaScript, so
-the export currently throws (see [Known limitations](#known-limitations)).
+scene exports to a real vector PDF via Skia's PDF backend, exposed to
+JavaScript by `docker/canvaskit-build/canvaskit-pdf-bindings.patch`. The
+committed `public/canvaskit/` artifacts predate that patch and need one Docker
+rebuild to carry the binding (see [Known limitations](#known-limitations)).
 
 Two `<canvas>` elements show the two backends side by side:
 
@@ -25,9 +26,10 @@ The two left-hand buttons:
   `PIXI.Graphics` to the current scene; both canvases redraw and the new shape
   becomes interactive.
 - **Export to PDF** — runs the scene through Skia's PDF document API and
-  downloads `scene.pdf`. Currently throws `PDFExportNotSupportedError`: the
-  bundled CanvasKit exposes no `MakePDFDocument` JS binding, and
-  `skia_enable_pdf=true` alone does not add one (see
+  downloads a real vector `scene.pdf`. The `MakePDFDocument` JS binding is
+  added by `canvaskit-pdf-bindings.patch`; `PDFExportNotSupportedError` only
+  fires if a stock/unpatched `canvaskit.js` is loaded. Note the committed
+  artifacts predate the patch and need a rebuild (see
   [Known limitations](#known-limitations) below).
 
 ## Live demo
@@ -135,11 +137,10 @@ tested in isolation:
 
 3. **Optionally serialise to PDF** (`src/skia/pdf-exporter.ts`) by routing
    the same render pass through `CanvasKit.MakePDFDocument(metadata)`
-   → `beginPage / endPage / close / getOutput`. The exporter throws
-   `PDFExportNotSupportedError` when the running CanvasKit build lacks the
-   PDF *JS* binding — which is the case for every current build, including
-   the committed custom PDF-backend build (see
-   [Known limitations](#known-limitations)).
+   → `beginPage / endPage / close / getOutput`. The `MakePDFDocument` JS
+   binding is provided by `canvaskit-pdf-bindings.patch`; the exporter throws
+   `PDFExportNotSupportedError` only when a stock/unpatched build (without the
+   binding) is loaded (see [Known limitations](#known-limitations)).
 
 The neutral IR also makes it trivial to add another backend later (e.g. SVG)
 without touching the Pixi side.
@@ -178,10 +179,12 @@ both a real Pixi-canvas click and a synthetic Skia-canvas hit.
 2. Calls `canvasKit.MakePDFDocument(metadata)` — the document writes to an
    internal sink, so no stream argument is passed.
 3. `beginPage(width, height)` → walks the container through
-   `PixiToSkiaRenderer` → `endPage()`, all wrapped in `try { … } finally {
-   doc.close(); }` so the document is always released.
+   `PixiToSkiaRenderer` → `endPage()`, with `doc.close()` in a `finally` so
+   the page is always finalized. A null `beginPage` (failed document init) or
+   an empty `getOutput()` raises `PDFExportFailedError`.
 4. Reads the accumulated bytes via `getOutput()` and returns a `Blob` of
-   type `application/pdf`.
+   type `application/pdf`, then frees the document with `doc.delete()` (the
+   binding is a raw-pointer Embind object, so JS must release it).
 
 The UI handler (`src/ui/export-button.ts`) then creates an object URL, fires a
 hidden `<a download="scene.pdf">` click, removes the anchor, and revokes the
@@ -200,24 +203,23 @@ returns a ready-to-use `App`.
 
 ## Known limitations
 
-- **Bundled CanvasKit has no PDF *JS binding*.** The committed
-  `public/canvaskit/canvaskit.{js,wasm}` are the artifacts of the **custom
-  PDF-backend build** in `docker/canvaskit-build/` (compiled with
-  `skia_enable_pdf=true`), produced by `npm run build:canvaskit` — **not** the
-  stock npm package. Loading the scene and using both canvases works fine, but
-  **"Export to PDF" still throws `PDFExportNotSupportedError`**, because
-  `skia_enable_pdf=true` only builds Skia's C++ `SkPDF::MakeDocument`; it does
-  **not** expose `MakePDFDocument` to JavaScript.
+- **Committed CanvasKit artifacts predate the PDF JS binding.** The
+  `MakePDFDocument` JS binding now exists: `canvaskit-pdf-bindings.patch`
+  patches `modules/canvaskit/canvaskit_bindings.cpp` (adds a `JsPDFDocument`
+  wrapper + an `EMSCRIPTEN_BINDINGS` entry) and the Dockerfile applies it
+  during `docker build`, on top of `skia_enable_pdf=true`. So a fresh
+  `npm run build:canvaskit` **does** produce a `canvaskit.js` that exports
+  `MakePDFDocument`.
 
-  Exposing it requires patching `modules/canvaskit/canvaskit_bindings.cpp`
-  (derive an `SkWStream` into a `Uint8Array` and add an `EMSCRIPTEN_BINDINGS`
-  entry), then rebuilding. This is the **deferred "Task 8a"** in the
-  implementation plan
-  (`docs/plans/completed/2026-05-24-pixi-skia-pdf-renderer.md`). **Re-running
-  `npm run build:canvaskit` with the current `build.sh` alone will _not_ enable
-  PDF export** — the binding patch must land first. See
-  `docker/canvaskit-build/README.md` for the full scope note, build flags,
-  timing, and disk requirements (~30-60 minutes for a fresh build).
+  The catch is only that the **committed** `public/canvaskit/canvaskit.{js,wasm}`
+  were built *before* the patch, so until they are regenerated (one ~30-60 min
+  Docker rebuild — see **Post-Completion** in
+  `docs/plans/2026-06-05-canvaskit-pdf-bindings.md`) the loaded build lacks the
+  binding and **"Export to PDF" still throws `PDFExportNotSupportedError`**.
+  This closes the previously-deferred "Task 8a" from
+  `docs/plans/completed/2026-05-24-pixi-skia-pdf-renderer.md`. See
+  `docker/canvaskit-build/README.md` for the patch details, build flags,
+  timing, and disk requirements.
 
 - **GitHub Actions does not rebuild CanvasKit.** The deploy workflow simply
   copies `public/canvaskit/` through `vite build`, so the deployed site

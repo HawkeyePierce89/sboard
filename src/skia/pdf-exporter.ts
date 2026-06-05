@@ -40,6 +40,19 @@ export class PDFExportNotSupportedError extends Error {
 }
 
 /**
+ * Raised when the PDF binding is present but the document failed to produce
+ * output — e.g. `SkPDF::MakeDocument` could not initialize (so `beginPage`
+ * returned null) or `getOutput()` yielded an empty buffer. Distinct from
+ * {@link PDFExportNotSupportedError}, which means the binding is absent.
+ */
+export class PDFExportFailedError extends Error {
+  constructor(detail: string) {
+    super(`PDF export failed: ${detail}`);
+    this.name = 'PDFExportFailedError';
+  }
+}
+
+/**
  * Render a Pixi container into a single-page vector PDF and return the
  * resulting bytes as a Blob suitable for `URL.createObjectURL` download.
  *
@@ -72,13 +85,31 @@ export async function exportToPDF(
   const sceneNode = walkContainer(container);
 
   try {
-    const pageCanvas = doc.beginPage(width, height);
-    renderer.render(pageCanvas, sceneNode);
-    doc.endPage();
-  } finally {
-    doc.close();
-  }
+    try {
+      const pageCanvas = doc.beginPage(width, height);
+      if (!pageCanvas) {
+        // SkPDF::MakeDocument failed to initialize (e.g. allocation failure
+        // inside CanvasKit); beginPage() returns null rather than a canvas.
+        throw new PDFExportFailedError('document failed to initialize');
+      }
+      renderer.render(pageCanvas, sceneNode);
+      doc.endPage();
+    } finally {
+      doc.close();
+    }
 
-  const bytes = doc.getOutput();
-  return new Blob([bytes as BlobPart], { type: 'application/pdf' });
+    const bytes = doc.getOutput();
+    if (bytes.length === 0) {
+      // close() ran but no bytes were produced — surface a failure rather
+      // than handing back a 0-byte "PDF" Blob.
+      throw new PDFExportFailedError('empty document output');
+    }
+    // The Blob constructor copies `bytes` synchronously, so it is safe to
+    // release the document (and its retained output buffer) right after.
+    return new Blob([bytes as BlobPart], { type: 'application/pdf' });
+  } finally {
+    // JsPDFDocument is a raw-pointer Embind object; JS must free it
+    // explicitly or the wrapper and its retained PDF buffer leak.
+    doc.delete();
+  }
 }

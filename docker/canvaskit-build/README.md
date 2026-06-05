@@ -96,6 +96,12 @@ docker build --build-arg SKIA_REF=chrome/m130 -t canvaskit-pdf:latest \
     docker/canvaskit-build
 ```
 
+> ⚠️ `canvaskit-pdf-bindings.patch` is authored against `chrome/m120`
+> `canvaskit_bindings.cpp`. Bumping `SKIA_REF` to a different branch can make
+> the `git apply` step fail if Skia moved the patched context; re-author the
+> patch against the new ref (re-fetch the file, regenerate the diff) when you
+> bump it.
+
 ## Current state of the committed artifacts
 
 `public/canvaskit/canvaskit.{js,wasm}` are committed so the project is usable
