@@ -2,6 +2,7 @@ import type { CanvasKit } from 'canvaskit-wasm';
 import type { Container } from 'pixi.js';
 import {
   exportToPDF,
+  PDFExportFailedError,
   PDFExportNotSupportedError,
   type ExportToPDFOptions,
 } from '../skia/pdf-exporter';
@@ -127,6 +128,11 @@ async function runExport(args: RunExportArgs): Promise<void> {
 export function formatExportError(err: unknown): string {
   if (err instanceof PDFExportNotSupportedError) {
     return `PDF export unavailable: ${err.message}`;
+  }
+  if (err instanceof PDFExportFailedError) {
+    // Its message already begins with "PDF export failed:" — return it
+    // verbatim so the prefix is not doubled.
+    return err.message;
   }
   if (err instanceof Error) {
     return `PDF export failed: ${err.message}`;

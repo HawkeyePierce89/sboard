@@ -80,9 +80,14 @@ export async function exportToPDF(
     throw new PDFExportNotSupportedError();
   }
 
-  const doc: PDFDocument = canvasKit.MakePDFDocument(options.metadata);
+  // Build the scene IR before allocating the raw-pointer document. Scene
+  // walking replays Pixi graphics commands and can throw; keeping it ahead
+  // of MakePDFDocument means nothing throwable runs between the allocation
+  // and the try/finally that frees it — so the WASM doc can never leak.
   const renderer = new PixiToSkiaRenderer(canvasKit, options.imageProvider);
   const sceneNode = walkContainer(container);
+
+  const doc: PDFDocument = canvasKit.MakePDFDocument(options.metadata);
 
   try {
     try {
