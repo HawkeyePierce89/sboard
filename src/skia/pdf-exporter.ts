@@ -10,9 +10,12 @@ export interface ExportToPDFOptions {
 }
 
 /**
- * Type-guard: a stock `canvaskit-wasm@0.41.x` build does not expose the
- * PDF backend; only the custom build produced by `docker/canvaskit-build`
- * (with `skia_enable_pdf=true`) does. Callers should use this to fail
+ * Type-guard: no CanvasKit build in this repo currently exposes the PDF
+ * backend to JavaScript. Neither the stock `canvaskit-wasm@0.41.x` package
+ * nor the custom `docker/canvaskit-build` image (compiled with
+ * `skia_enable_pdf=true`) defines `MakePDFDocument` — that flag only builds
+ * Skia's C++ `SkPDF::MakeDocument`; the JS binding must still be added to
+ * `canvaskit_bindings.cpp` and the module rebuilt. Callers use this to fail
  * fast with a user-visible error rather than crashing inside CanvasKit.
  */
 export function hasPDFSupport(
@@ -27,8 +30,10 @@ export function hasPDFSupport(
 export class PDFExportNotSupportedError extends Error {
   constructor() {
     super(
-      'CanvasKit build does not expose MakePDFDocument — rebuild CanvasKit ' +
-        'with skia_enable_pdf=true (see docker/canvaskit-build/README.md).',
+      'CanvasKit build does not expose MakePDFDocument — the JS PDF binding ' +
+        'must be added to canvaskit_bindings.cpp and CanvasKit rebuilt ' +
+        '(see docker/canvaskit-build/README.md). Note: skia_enable_pdf=true ' +
+        'alone is not sufficient.',
     );
     this.name = 'PDFExportNotSupportedError';
   }
@@ -47,8 +52,9 @@ export class PDFExportNotSupportedError extends Error {
  *   4. `endPage()` finalizes the page, `close()` writes the trailer.
  *   5. `getOutput()` returns the accumulated bytes (`Uint8Array`).
  *
- * On a stock CanvasKit build this rejects with `PDFExportNotSupportedError`
- * — the caller (UI export button) should surface that to the user.
+ * Until the JS PDF binding is added to `canvaskit_bindings.cpp`, this rejects
+ * with `PDFExportNotSupportedError` — the caller (UI export button) should
+ * surface that to the user.
  */
 export async function exportToPDF(
   canvasKit: CanvasKit,

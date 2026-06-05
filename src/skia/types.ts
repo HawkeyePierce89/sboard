@@ -15,8 +15,10 @@ export type { Canvas, Image, Paint, Path, Surface };
  * The shape mirrors `SkPDF::Metadata` (see
  * https://skia.googlesource.com/skia/+/refs/heads/main/include/docs/SkPDFDocument.h).
  * It is reproduced locally because `@types/canvaskit-wasm@0.41.x` does
- * not declare any PDF surface — those bindings only exist in the
- * `skia_enable_pdf=true` custom build (see docker/canvaskit-build).
+ * not declare any PDF surface — and no current build exposes one at runtime
+ * either: `skia_enable_pdf=true` only compiles Skia's C++ PDF backend, so the
+ * JS binding still has to be added to `canvaskit_bindings.cpp` (see
+ * docker/canvaskit-build).
  */
 export interface PDFMetadata {
   title?: string;
