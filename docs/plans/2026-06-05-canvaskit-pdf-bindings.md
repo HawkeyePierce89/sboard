@@ -50,9 +50,9 @@ The provided `getOutput()` builds a `typed_memory_view` over `sk_sp<SkData> data
 
 **Files:** Modify `docker/canvaskit-build/Dockerfile`
 
-- [ ] After the `git clone ... skia.git` step (WORKDIR `/workspace/skia`), add `COPY canvaskit-pdf-bindings.patch /workspace/canvaskit-pdf-bindings.patch` and `RUN git apply /workspace/canvaskit-pdf-bindings.patch` (before `COPY build.sh` / the ENTRYPOINT build)
-- [ ] Confirm ordering relative to `tools/git-sync-deps` (deps sync does not touch these two files, so applying right after clone is safe and deterministic)
-- [ ] verify the Dockerfile still lints/parses (e.g. `docker build` syntax check or `hadolint` if available; otherwise a no-op build-arg dry check)
+- [x] After the `git clone ... skia.git` step (WORKDIR `/workspace/skia`), add `COPY canvaskit-pdf-bindings.patch /workspace/canvaskit-pdf-bindings.patch` and `RUN git apply /workspace/canvaskit-pdf-bindings.patch` (before `COPY build.sh` / the ENTRYPOINT build) — added at `Dockerfile:29-30`
+- [x] Confirm ordering relative to `tools/git-sync-deps` (deps sync does not touch these two files, so applying right after clone is safe and deterministic) — patch placed immediately after `RUN python3 tools/git-sync-deps`; git-sync-deps only fetches third-party deps and never touches `modules/canvaskit/`, so application is deterministic (documented in a Dockerfile comment). End-to-end verified: fetched real `chrome/m120` `canvaskit_bindings.cpp` (2586 lines), `git apply --check` exits 0 and a real `git apply` inserts the 3 PDF symbols with no fuzz
+- [x] verify the Dockerfile still lints/parses (e.g. `docker build` syntax check or `hadolint` if available; otherwise a no-op build-arg dry check) — `docker build --check` passes (only a pre-existing, unrelated `InvalidBaseImagePlatform` amd64/arm64 warning). `npm test` still green (224 passed, 1 skipped)
 
 ### Task 4: Correct now-stale documentation and code comments
 
