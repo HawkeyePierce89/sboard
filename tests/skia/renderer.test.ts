@@ -370,6 +370,24 @@ describe('PixiToSkiaRenderer — drawing a filled rect', () => {
     expect(path.delete).toHaveBeenCalledTimes(1);
   });
 
+  it('releases the Path exactly once when drawPath throws (no double-free)', () => {
+    const root = new Container();
+    const g = new Graphics();
+    g.beginFill(0xff0000, 1).drawRect(10, 20, 100, 50).endFill();
+    root.addChild(g);
+
+    canvas.drawPath.mockImplementation(() => {
+      throw new Error('boom');
+    });
+
+    expect(() => renderer.renderContainer(castCanvas(canvas), root)).toThrow('boom');
+
+    // The Path was deleted in flush()'s finally; the outer finally must NOT
+    // delete the same (already-freed) object a second time.
+    expect(mock.paths).toHaveLength(1);
+    expect(mock.paths[0].delete).toHaveBeenCalledTimes(1);
+  });
+
   it('uses LTRBRect for ellipses, centered on (cx,cy) with radii rx,ry', () => {
     const root = new Container();
     const g = new Graphics();
@@ -502,6 +520,11 @@ describe('PixiToSkiaRenderer — multi-shape Graphics', () => {
     // Each shape flushes and allocates a fresh Path — distinct instances.
     expect(firstPath).not.toBe(secondPath);
     expect(firstPath._id).not.toBe(secondPath._id);
+
+    // Every allocated Path is released exactly once — no leak, no double-free.
+    for (const path of mock.paths) {
+      expect(path.delete).toHaveBeenCalledTimes(1);
+    }
   });
 
   it('does not carry a stroke from a previous entry into a later entry that has no stroke command', () => {

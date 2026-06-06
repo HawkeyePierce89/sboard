@@ -209,14 +209,18 @@ export class PixiToSkiaRenderer {
 
     const flush = (): void => {
       if (!path || !hasGeometry) return;
-      try {
-        if (fillPaint) canvas.drawPath(path, fillPaint);
-        if (strokePaint) canvas.drawPath(path, strokePaint);
-      } finally {
-        path.delete();
-      }
+      // Detach the shared `path`/`hasGeometry` state up front so the object is
+      // deleted exactly once even if `drawPath` throws: the outer `finally`
+      // then sees `path === null` and won't re-delete this same Path.
+      const p = path;
       path = null;
       hasGeometry = false;
+      try {
+        if (fillPaint) canvas.drawPath(p, fillPaint);
+        if (strokePaint) canvas.drawPath(p, strokePaint);
+      } finally {
+        p.delete();
+      }
     };
 
     try {
