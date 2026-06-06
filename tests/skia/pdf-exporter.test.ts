@@ -86,7 +86,7 @@ function makeMockPDFCanvasKit(
       delete: vi.fn(),
     };
   });
-  const PathBuilderCtor = vi.fn(function MockPathBuilder() {
+  const PathCtor = vi.fn(function MockPath() {
     return {
       moveTo: vi.fn(),
       lineTo: vi.fn(),
@@ -94,14 +94,13 @@ function makeMockPDFCanvasKit(
       addOval: vi.fn(),
       addCircle: vi.fn(),
       close: vi.fn(),
-      detach: vi.fn(() => ({ delete: vi.fn() })),
       delete: vi.fn(),
     };
   });
 
   const ck = {
     Paint: PaintCtor,
-    PathBuilder: PathBuilderCtor,
+    Path: PathCtor,
     PaintStyle: { Fill: 'FILL', Stroke: 'STROKE' },
     XYWHRect: (x: number, y: number, w: number, h: number) =>
       [x, y, x + w, y + h] as unknown,
@@ -204,7 +203,7 @@ describe('exportToPDF — failure modes', () => {
     const ckWithoutPDF = {
       // Minimal surface so the renderer constructor doesn't get to use it.
       Paint: vi.fn(),
-      PathBuilder: vi.fn(),
+      Path: vi.fn(),
     } as unknown as CanvasKit;
 
     await expect(exportToPDF(ckWithoutPDF, root, 100, 100)).rejects.toBeInstanceOf(
@@ -215,8 +214,8 @@ describe('exportToPDF — failure modes', () => {
   it('still closes the document if rendering throws (resources released)', async () => {
     const mock = makeMockPDFCanvasKit();
     const root = new Container();
-    // Cause render() to explode by stubbing PathBuilder to throw on construction.
-    (mock.ck as unknown as { PathBuilder: unknown }).PathBuilder = function ThrowingPathBuilder() {
+    // Cause render() to explode by stubbing Path to throw on construction.
+    (mock.ck as unknown as { Path: unknown }).Path = function ThrowingPath() {
       throw new Error('boom');
     };
     const g = new Graphics();

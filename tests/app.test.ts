@@ -265,7 +265,7 @@ describe('createApp', () => {
   it('returns an App wired with the CanvasKit surface and the supplied initialScene', () => {
     // Keep the scene empty so the inner `PixiToSkiaRenderer` only needs
     // canvas.save/concat/restore from the mock surface (no Paint /
-    // PathBuilder constructors on the CanvasKit stub).
+    // Path constructors on the CanvasKit stub).
     const initialScene = new Container();
 
     const app = createApp({

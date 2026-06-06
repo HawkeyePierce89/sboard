@@ -5,8 +5,8 @@ and, in parallel, renders the same scene through a custom TS wrapper on top of
 [Skia / CanvasKit](https://skia.org/docs/user/modules/canvaskit/). The Skia
 scene exports to a real vector PDF via Skia's PDF backend, exposed to
 JavaScript by `docker/canvaskit-build/canvaskit-pdf-bindings.patch`. The
-committed `public/canvaskit/` artifacts predate that patch and need one Docker
-rebuild to carry the binding (see [Known limitations](#known-limitations)).
+committed `public/canvaskit/canvaskit.{js,wasm}` already carry that patch, so
+"Export to PDF" works out of the box without running the Docker build.
 
 Two `<canvas>` elements show the two backends side by side:
 
@@ -27,10 +27,9 @@ The two left-hand buttons:
   becomes interactive.
 - **Export to PDF** — runs the scene through Skia's PDF document API and
   downloads a real vector `scene.pdf`. The `MakePDFDocument` JS binding is
-  added by `canvaskit-pdf-bindings.patch`; `PDFExportNotSupportedError` only
-  fires if a stock/unpatched `canvaskit.js` is loaded. Note the committed
-  artifacts predate the patch and need a rebuild (see
-  [Known limitations](#known-limitations) below).
+  added by `canvaskit-pdf-bindings.patch` and is present in the committed
+  `public/canvaskit/` artifacts; `PDFExportNotSupportedError` would only fire
+  if a stock/unpatched `canvaskit.js` were swapped in.
 
 ## Live demo
 
@@ -203,23 +202,15 @@ returns a ready-to-use `App`.
 
 ## Known limitations
 
-- **Committed CanvasKit artifacts predate the PDF JS binding.** The
-  `MakePDFDocument` JS binding now exists: `canvaskit-pdf-bindings.patch`
-  patches `modules/canvaskit/canvaskit_bindings.cpp` (adds a `JsPDFDocument`
-  wrapper + an `EMSCRIPTEN_BINDINGS` entry) and the Dockerfile applies it
-  during `docker build`, on top of `skia_enable_pdf=true`. So a fresh
-  `npm run build:canvaskit` **does** produce a `canvaskit.js` that exports
-  `MakePDFDocument`.
-
-  The catch is only that the **committed** `public/canvaskit/canvaskit.{js,wasm}`
-  were built *before* the patch, so until they are regenerated (one ~30-60 min
-  Docker rebuild — see **Post-Completion** in
-  `docs/plans/2026-06-05-canvaskit-pdf-bindings.md`) the loaded build lacks the
-  binding and **"Export to PDF" still throws `PDFExportNotSupportedError`**.
-  This closes the previously-deferred "Task 8a" from
-  `docs/plans/completed/2026-05-24-pixi-skia-pdf-renderer.md`. See
-  `docker/canvaskit-build/README.md` for the patch details, build flags,
-  timing, and disk requirements.
+- **Rebuilding CanvasKit is expensive.** `canvaskit-pdf-bindings.patch` patches
+  `modules/canvaskit/canvaskit_bindings.cpp` (adds a `JsPDFDocument` wrapper +
+  an `EMSCRIPTEN_BINDINGS` entry) and the Dockerfile applies it during
+  `docker build`, on top of `skia_enable_pdf=true`. The committed
+  `public/canvaskit/canvaskit.{js,wasm}` already include this binding, so most
+  contributors never need to run the build. When they do (e.g. to bump the
+  Skia ref), `npm run build:canvaskit` takes ~30-60 minutes and needs ~5-8 GB
+  of free disk inside the Docker container — see
+  `docker/canvaskit-build/README.md` for flags and troubleshooting.
 
 - **GitHub Actions does not rebuild CanvasKit.** The deploy workflow simply
   copies `public/canvaskit/` through `vite build`, so the deployed site

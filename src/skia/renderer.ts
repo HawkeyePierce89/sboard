@@ -1,4 +1,4 @@
-import type { CanvasKit, ColorFilter, Image, PathBuilder } from 'canvaskit-wasm';
+import type { CanvasKit, ColorFilter, Image } from 'canvaskit-wasm';
 import type { BaseTexture, Container, Texture } from 'pixi.js';
 import type { DrawCommand } from '../pixi/graphics-commands';
 import type {
@@ -9,7 +9,7 @@ import type {
 import { walkContainer } from '../pixi/scene-walker';
 import type { Matrix2D } from '../pixi/transform';
 import { IDENTITY_MATRIX, composeMatrices } from '../pixi/transform';
-import type { Canvas, Paint } from './types';
+import type { Canvas, MutablePath, Paint } from './types';
 
 /**
  * Convert a PIXI affine matrix `[a, b, c, d, tx, ty]` into a 9-entry
@@ -199,26 +199,28 @@ export class PixiToSkiaRenderer {
     const ck = this.canvasKit;
     let fillPaint: Paint | null = null;
     let strokePaint: Paint | null = null;
-    let builder: PathBuilder | null = null;
+    let path: MutablePath | null = null;
     let hasGeometry = false;
 
-    const ensureBuilder = (): PathBuilder => {
-      if (!builder) builder = new ck.PathBuilder();
-      return builder;
+    const ensurePath = (): MutablePath => {
+      if (!path) path = new ck.Path() as MutablePath;
+      return path;
     };
 
     const flush = (): void => {
-      if (!builder || !hasGeometry) return;
-      const path = builder.detach();
-      try {
-        if (fillPaint) canvas.drawPath(path, fillPaint);
-        if (strokePaint) canvas.drawPath(path, strokePaint);
-      } finally {
-        path.delete();
-      }
-      builder.delete();
-      builder = null;
+      if (!path || !hasGeometry) return;
+      // Detach the shared `path`/`hasGeometry` state up front so the object is
+      // deleted exactly once even if `drawPath` throws: the outer `finally`
+      // then sees `path === null` and won't re-delete this same Path.
+      const p = path;
+      path = null;
       hasGeometry = false;
+      try {
+        if (fillPaint) canvas.drawPath(p, fillPaint);
+        if (strokePaint) canvas.drawPath(p, strokePaint);
+      } finally {
+        p.delete();
+      }
     };
 
     try {
@@ -241,19 +243,19 @@ export class PixiToSkiaRenderer {
             strokePaint = this.makeStrokePaint(cmd);
             break;
           case 'moveTo':
-            ensureBuilder().moveTo(cmd.x, cmd.y);
+            ensurePath().moveTo(cmd.x, cmd.y);
             hasGeometry = true;
             break;
           case 'lineTo':
-            ensureBuilder().lineTo(cmd.x, cmd.y);
+            ensurePath().lineTo(cmd.x, cmd.y);
             hasGeometry = true;
             break;
           case 'rect':
-            ensureBuilder().addRect(ck.XYWHRect(cmd.x, cmd.y, cmd.w, cmd.h));
+            ensurePath().addRect(ck.XYWHRect(cmd.x, cmd.y, cmd.w, cmd.h));
             hasGeometry = true;
             break;
           case 'ellipse':
-            ensureBuilder().addOval(
+            ensurePath().addOval(
               ck.LTRBRect(
                 cmd.cx - cmd.rx,
                 cmd.cy - cmd.ry,
@@ -264,11 +266,11 @@ export class PixiToSkiaRenderer {
             hasGeometry = true;
             break;
           case 'circle':
-            ensureBuilder().addCircle(cmd.cx, cmd.cy, cmd.r);
+            ensurePath().addCircle(cmd.cx, cmd.cy, cmd.r);
             hasGeometry = true;
             break;
           case 'closePath':
-            ensureBuilder().close();
+            ensurePath().close();
             break;
           case 'endEntry':
             flush();
@@ -287,7 +289,7 @@ export class PixiToSkiaRenderer {
     } finally {
       if (fillPaint) fillPaint.delete();
       if (strokePaint) strokePaint.delete();
-      (builder as PathBuilder | null)?.delete();
+      (path as MutablePath | null)?.delete();
     }
   }
 

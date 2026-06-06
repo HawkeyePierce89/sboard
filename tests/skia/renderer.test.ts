@@ -24,23 +24,15 @@ interface SpyPaint {
   _id: number;
 }
 
-interface SpyPathBuilder {
+interface SpyPath {
   moveTo: ReturnType<typeof vi.fn>;
   lineTo: ReturnType<typeof vi.fn>;
   addRect: ReturnType<typeof vi.fn>;
   addOval: ReturnType<typeof vi.fn>;
   addCircle: ReturnType<typeof vi.fn>;
   close: ReturnType<typeof vi.fn>;
-  detach: ReturnType<typeof vi.fn>;
-  delete: ReturnType<typeof vi.fn>;
-  _kind: 'pathBuilder';
-  _id: number;
-}
-
-interface SpyPath {
   delete: ReturnType<typeof vi.fn>;
   _kind: 'path';
-  _builderId: number;
   _id: number;
 }
 
@@ -63,7 +55,6 @@ interface SpyColorFilter {
 interface MockCanvasKit {
   ck: CanvasKit;
   paints: SpyPaint[];
-  builders: SpyPathBuilder[];
   paths: SpyPath[];
   colorFilters: SpyColorFilter[];
   fill: 'FILL';
@@ -73,7 +64,6 @@ interface MockCanvasKit {
 
 function makeMockCanvasKit(): MockCanvasKit {
   const paints: SpyPaint[] = [];
-  const builders: SpyPathBuilder[] = [];
   const paths: SpyPath[] = [];
   const colorFilters: SpyColorFilter[] = [];
 
@@ -93,44 +83,32 @@ function makeMockCanvasKit(): MockCanvasKit {
     return paint;
   });
 
-  const PathBuilderCtor = vi.fn(function (): SpyPathBuilder {
-    const id = builders.length;
-    const detach = vi.fn(() => {
-      const path: SpyPath = {
-        delete: vi.fn(),
-        _kind: 'path',
-        _builderId: id,
-        _id: paths.length,
-      };
-      paths.push(path);
-      return path;
-    });
-    const builder: SpyPathBuilder = {
+  const PathCtor = vi.fn(function (): SpyPath {
+    const path: SpyPath = {
       moveTo: vi.fn(),
       lineTo: vi.fn(),
       addRect: vi.fn(),
       addOval: vi.fn(),
       addCircle: vi.fn(),
       close: vi.fn(),
-      detach,
       delete: vi.fn(),
-      _kind: 'pathBuilder',
-      _id: id,
+      _kind: 'path',
+      _id: paths.length,
     };
     // chainable
-    builder.moveTo.mockReturnValue(builder);
-    builder.lineTo.mockReturnValue(builder);
-    builder.addRect.mockReturnValue(builder);
-    builder.addOval.mockReturnValue(builder);
-    builder.addCircle.mockReturnValue(builder);
-    builder.close.mockReturnValue(builder);
-    builders.push(builder);
-    return builder;
+    path.moveTo.mockReturnValue(path);
+    path.lineTo.mockReturnValue(path);
+    path.addRect.mockReturnValue(path);
+    path.addOval.mockReturnValue(path);
+    path.addCircle.mockReturnValue(path);
+    path.close.mockReturnValue(path);
+    paths.push(path);
+    return path;
   });
 
   const ck = {
     Paint: PaintCtor,
-    PathBuilder: PathBuilderCtor,
+    Path: PathCtor,
     PaintStyle: { Fill: 'FILL', Stroke: 'STROKE' },
     BlendMode: { Modulate: 'MODULATE' },
     ColorFilter: {
@@ -154,7 +132,6 @@ function makeMockCanvasKit(): MockCanvasKit {
   return {
     ck,
     paints,
-    builders,
     paths,
     colorFilters,
     fill: 'FILL',
@@ -360,7 +337,7 @@ describe('PixiToSkiaRenderer — drawing a filled rect', () => {
     renderer = new PixiToSkiaRenderer(mock.ck);
   });
 
-  it('builds a Paint(Fill) and a PathBuilder, adds the rect, draws the path, then cleans up', () => {
+  it('builds a Paint(Fill) and a Path, adds the rect, draws the path, then cleans up', () => {
     const root = new Container();
     const g = new Graphics();
     g.beginFill(0xff0000, 1).drawRect(10, 20, 100, 50).endFill();
@@ -376,20 +353,39 @@ describe('PixiToSkiaRenderer — drawing a filled rect', () => {
       [1, 0, 0, 1],
     );
 
-    expect(mock.builders).toHaveLength(1);
-    const builder = mock.builders[0];
-    expect(builder.addRect).toHaveBeenCalledTimes(1);
-    expect(builder.addRect.mock.calls[0][0]).toEqual([10, 20, 110, 70]);
+    expect(mock.paths).toHaveLength(1);
+    const path = mock.paths[0];
+    expect(path.addRect).toHaveBeenCalledTimes(1);
+    expect(path.addRect.mock.calls[0][0]).toEqual([10, 20, 110, 70]);
 
     expect(canvas.drawPath).toHaveBeenCalledTimes(1);
     const [drawnPath, drawnPaint] = canvas.drawPath.mock.calls[0];
     expect((drawnPath as SpyPath)._kind).toBe('path');
+    // The Path object is drawn directly (no detach step):
+    expect(drawnPath).toBe(path);
     expect(drawnPaint).toBe(paint);
 
     // Resources released:
     expect(paint.delete).toHaveBeenCalledTimes(1);
-    expect((drawnPath as SpyPath).delete).toHaveBeenCalledTimes(1);
-    expect(builder.delete).toHaveBeenCalled();
+    expect(path.delete).toHaveBeenCalledTimes(1);
+  });
+
+  it('releases the Path exactly once when drawPath throws (no double-free)', () => {
+    const root = new Container();
+    const g = new Graphics();
+    g.beginFill(0xff0000, 1).drawRect(10, 20, 100, 50).endFill();
+    root.addChild(g);
+
+    canvas.drawPath.mockImplementation(() => {
+      throw new Error('boom');
+    });
+
+    expect(() => renderer.renderContainer(castCanvas(canvas), root)).toThrow('boom');
+
+    // The Path was deleted in flush()'s finally; the outer finally must NOT
+    // delete the same (already-freed) object a second time.
+    expect(mock.paths).toHaveLength(1);
+    expect(mock.paths[0].delete).toHaveBeenCalledTimes(1);
   });
 
   it('uses LTRBRect for ellipses, centered on (cx,cy) with radii rx,ry', () => {
@@ -400,9 +396,9 @@ describe('PixiToSkiaRenderer — drawing a filled rect', () => {
 
     renderer.renderContainer(castCanvas(canvas), root);
 
-    const builder = mock.builders[0];
-    expect(builder.addOval).toHaveBeenCalledTimes(1);
-    expect(builder.addOval.mock.calls[0][0]).toEqual([10, 40, 90, 80]);
+    const path = mock.paths[0];
+    expect(path.addOval).toHaveBeenCalledTimes(1);
+    expect(path.addOval.mock.calls[0][0]).toEqual([10, 40, 90, 80]);
   });
 
   it('uses addCircle for circle shapes', () => {
@@ -413,8 +409,8 @@ describe('PixiToSkiaRenderer — drawing a filled rect', () => {
 
     renderer.renderContainer(castCanvas(canvas), root);
 
-    const builder = mock.builders[0];
-    expect(builder.addCircle).toHaveBeenCalledWith(30, 40, 25);
+    const path = mock.paths[0];
+    expect(path.addCircle).toHaveBeenCalledWith(30, 40, 25);
   });
 });
 
@@ -429,7 +425,7 @@ describe('PixiToSkiaRenderer — drawing a stroked line', () => {
     renderer = new PixiToSkiaRenderer(mock.ck);
   });
 
-  it('produces a Paint(Stroke) with the right width/color and emits moveTo/lineTo on the builder', () => {
+  it('produces a Paint(Stroke) with the right width/color and emits moveTo/lineTo on the path', () => {
     const root = new Container();
     const g = new Graphics();
     g.lineStyle(10, 0xffffff, 1).moveTo(0, 0).lineTo(150, 100);
@@ -445,15 +441,15 @@ describe('PixiToSkiaRenderer — drawing a stroked line', () => {
       [1, 1, 1, 1],
     );
 
-    const builder = mock.builders[0];
-    expect(builder.moveTo).toHaveBeenCalledWith(0, 0);
-    expect(builder.lineTo).toHaveBeenCalledWith(150, 100);
+    const path = mock.paths[0];
+    expect(path.moveTo).toHaveBeenCalledWith(0, 0);
+    expect(path.lineTo).toHaveBeenCalledWith(150, 100);
 
     expect(canvas.drawPath).toHaveBeenCalledTimes(1);
     expect(canvas.drawPath.mock.calls[0][1]).toBe(paint);
   });
 
-  it('calls .close() on the builder when a closePath command appears', () => {
+  it('calls .close() on the path when a closePath command appears', () => {
     const root = new Container();
     const g = new Graphics();
     g.beginFill(0xabcdef, 1)
@@ -462,8 +458,8 @@ describe('PixiToSkiaRenderer — drawing a stroked line', () => {
     root.addChild(g);
 
     renderer.renderContainer(castCanvas(canvas), root);
-    const builder = mock.builders[0];
-    expect(builder.close).toHaveBeenCalledTimes(1);
+    const path = mock.paths[0];
+    expect(path.close).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -503,7 +499,7 @@ describe('PixiToSkiaRenderer — combined fill + stroke on a single shape', () =
 });
 
 describe('PixiToSkiaRenderer — multi-shape Graphics', () => {
-  it('uses a fresh PathBuilder per shape and draws each in turn', () => {
+  it('uses a fresh Path per shape and draws each in turn', () => {
     const mock = makeMockCanvasKit();
     const canvas = makeMockCanvas();
     const renderer = new PixiToSkiaRenderer(mock.ck);
@@ -516,12 +512,19 @@ describe('PixiToSkiaRenderer — multi-shape Graphics', () => {
 
     renderer.renderContainer(castCanvas(canvas), root);
 
-    expect(mock.builders.length).toBeGreaterThanOrEqual(2);
+    expect(mock.paths.length).toBeGreaterThanOrEqual(2);
     expect(canvas.drawPath).toHaveBeenCalledTimes(2);
 
     const firstPath = canvas.drawPath.mock.calls[0][0] as SpyPath;
     const secondPath = canvas.drawPath.mock.calls[1][0] as SpyPath;
-    expect(firstPath._builderId).not.toBe(secondPath._builderId);
+    // Each shape flushes and allocates a fresh Path — distinct instances.
+    expect(firstPath).not.toBe(secondPath);
+    expect(firstPath._id).not.toBe(secondPath._id);
+
+    // Every allocated Path is released exactly once — no leak, no double-free.
+    for (const path of mock.paths) {
+      expect(path.delete).toHaveBeenCalledTimes(1);
+    }
   });
 
   it('does not carry a stroke from a previous entry into a later entry that has no stroke command', () => {
