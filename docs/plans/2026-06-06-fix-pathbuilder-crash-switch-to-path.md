@@ -40,13 +40,13 @@ We bridge it exactly the way the codebase already bridges the PDF runtime/types 
 - Modify: `src/skia/renderer.ts`
 - Modify: `tests/skia/renderer.test.ts`
 
-- [ ] In `src/skia/types.ts`, add and export a `MutablePath` interface extending `Path` with the mutation methods our m120 wasm exposes: `moveTo(x,y)`, `lineTo(x,y)`, `addRect(rect: InputRect)`, `addOval(oval: InputRect)`, `addCircle(x,y,r)`, `close()` (import `InputRect` from `canvaskit-wasm`)
-- [ ] In `src/skia/renderer.ts`: drop the `PathBuilder` import; import `Path`/`MutablePath` (and `InputRect` if needed) from the local types / `canvaskit-wasm`
-- [ ] In `drawGraphics`: rename `builder` → `path` typed `MutablePath | null`; `ensureBuilder` → `ensurePath` creating `new ck.Path() as MutablePath`; keep the `hasGeometry` flag
-- [ ] In `flush`: draw the `path` object directly into `canvas.drawPath(path, fillPaint/strokePaint)` (remove the `builder.detach()` step), then `path.delete()` and reset `path = null`; update the `finally` cleanup from `(builder as PathBuilder | null)?.delete()` to `path?.delete()`
-- [ ] Update `tests/skia/renderer.test.ts`: rename `SpyPathBuilder`→`SpyPath`/`builders`→`paths` mock infrastructure, register the ctor as `ck.Path` (not `ck.PathBuilder`), drop `detach`, make `drawPath` receive the path spy directly, and fix assertions that used `detach`/`_builderId` (multi-shape test compares distinct path instances instead)
-- [ ] run `npm test` — must pass
-- [ ] run `npm run typecheck` — must pass (proves the runtime/types gap is closed)
+- [x] In `src/skia/types.ts`, add and export a `MutablePath` interface extending `Path` with the mutation methods our m120 wasm exposes: `moveTo(x,y)`, `lineTo(x,y)`, `addRect(rect: InputRect)`, `addOval(oval: InputRect)`, `addCircle(x,y,r)`, `close()` (import `InputRect` from `canvaskit-wasm`)
+- [x] In `src/skia/renderer.ts`: drop the `PathBuilder` import; import `Path`/`MutablePath` (and `InputRect` if needed) from the local types / `canvaskit-wasm`
+- [x] In `drawGraphics`: rename `builder` → `path` typed `MutablePath | null`; `ensureBuilder` → `ensurePath` creating `new ck.Path() as MutablePath`; keep the `hasGeometry` flag
+- [x] In `flush`: draw the `path` object directly into `canvas.drawPath(path, fillPaint/strokePaint)` (remove the `builder.detach()` step), then `path.delete()` and reset `path = null`; update the `finally` cleanup from `(builder as PathBuilder | null)?.delete()` to `(path as MutablePath | null)?.delete()` (cast retained to defeat the same control-flow `never`-narrowing the original used)
+- [x] Update `tests/skia/renderer.test.ts`: rename `SpyPathBuilder`→`SpyPath`/`builders`→`paths` mock infrastructure, register the ctor as `ck.Path` (not `ck.PathBuilder`), drop `detach`, make `drawPath` receive the path spy directly, and fix assertions that used `detach`/`_builderId` (multi-shape test compares distinct path instances instead)
+- [x] run `npm test` — Task 1 files pass (renderer.test.ts: 40/40); the only remaining failures are in tests/skia/pdf-exporter.test.ts (stale `ck.PathBuilder` mocks driving the shared renderer), updated in Task 2
+- [x] run `npm run typecheck` — must pass (proves the runtime/types gap is closed)
 
 ### Task 2: Update downstream test mocks (PDF exporter + app)
 
