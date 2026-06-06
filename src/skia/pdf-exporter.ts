@@ -10,13 +10,12 @@ export interface ExportToPDFOptions {
 }
 
 /**
- * Type-guard: no CanvasKit build in this repo currently exposes the PDF
- * backend to JavaScript. Neither the stock `canvaskit-wasm@0.41.x` package
- * nor the custom `docker/canvaskit-build` image (compiled with
- * `skia_enable_pdf=true`) defines `MakePDFDocument` — that flag only builds
- * Skia's C++ `SkPDF::MakeDocument`; the JS binding must still be added to
- * `canvaskit_bindings.cpp` and the module rebuilt. Callers use this to fail
- * fast with a user-visible error rather than crashing inside CanvasKit.
+ * Type-guard: whether the loaded CanvasKit exposes the PDF backend to
+ * JavaScript. The custom `docker/canvaskit-build` image defines
+ * `MakePDFDocument` via `canvaskit-pdf-bindings.patch` (on top of
+ * `skia_enable_pdf=true`); the stock `canvaskit-wasm@0.41.x` package does not.
+ * Callers use this to fail fast with a user-visible error — rather than
+ * crashing inside CanvasKit — when a stock/unpatched build is loaded.
  */
 export function hasPDFSupport(
   canvasKit: CanvasKit,
@@ -30,12 +29,26 @@ export function hasPDFSupport(
 export class PDFExportNotSupportedError extends Error {
   constructor() {
     super(
-      'CanvasKit build does not expose MakePDFDocument — the JS PDF binding ' +
-        'must be added to canvaskit_bindings.cpp and CanvasKit rebuilt ' +
-        '(see docker/canvaskit-build/README.md). Note: skia_enable_pdf=true ' +
+      'CanvasKit build does not expose MakePDFDocument — a stock or ' +
+        'unpatched canvaskit.js is loaded. Rebuild with the PDF JS binding ' +
+        'via `npm run build:canvaskit` (applies canvaskit-pdf-bindings.patch; ' +
+        'see docker/canvaskit-build/README.md). Note: skia_enable_pdf=true ' +
         'alone is not sufficient.',
     );
     this.name = 'PDFExportNotSupportedError';
+  }
+}
+
+/**
+ * Raised when the PDF binding is present but the document failed to produce
+ * output — e.g. `SkPDF::MakeDocument` could not initialize (so `beginPage`
+ * returned null) or `getOutput()` yielded an empty buffer. Distinct from
+ * {@link PDFExportNotSupportedError}, which means the binding is absent.
+ */
+export class PDFExportFailedError extends Error {
+  constructor(detail: string) {
+    super(`PDF export failed: ${detail}`);
+    this.name = 'PDFExportFailedError';
   }
 }
 
@@ -52,9 +65,9 @@ export class PDFExportNotSupportedError extends Error {
  *   4. `endPage()` finalizes the page, `close()` writes the trailer.
  *   5. `getOutput()` returns the accumulated bytes (`Uint8Array`).
  *
- * Until the JS PDF binding is added to `canvaskit_bindings.cpp`, this rejects
- * with `PDFExportNotSupportedError` — the caller (UI export button) should
- * surface that to the user.
+ * If a stock/unpatched CanvasKit (no `MakePDFDocument`) is loaded, this throws
+ * `PDFExportNotSupportedError` — the caller (UI export button) should surface
+ * that to the user.
  */
 export async function exportToPDF(
   canvasKit: CanvasKit,
@@ -67,18 +80,41 @@ export async function exportToPDF(
     throw new PDFExportNotSupportedError();
   }
 
-  const doc: PDFDocument = canvasKit.MakePDFDocument(options.metadata);
+  // Build the scene IR before allocating the raw-pointer document. Scene
+  // walking replays Pixi graphics commands and can throw; keeping it ahead
+  // of MakePDFDocument means nothing throwable runs between the allocation
+  // and the try/finally that frees it — so the WASM doc can never leak.
   const renderer = new PixiToSkiaRenderer(canvasKit, options.imageProvider);
   const sceneNode = walkContainer(container);
 
-  try {
-    const pageCanvas = doc.beginPage(width, height);
-    renderer.render(pageCanvas, sceneNode);
-    doc.endPage();
-  } finally {
-    doc.close();
-  }
+  const doc: PDFDocument = canvasKit.MakePDFDocument(options.metadata);
 
-  const bytes = doc.getOutput();
-  return new Blob([bytes as BlobPart], { type: 'application/pdf' });
+  try {
+    try {
+      const pageCanvas = doc.beginPage(width, height);
+      if (!pageCanvas) {
+        // SkPDF::MakeDocument failed to initialize (e.g. allocation failure
+        // inside CanvasKit); beginPage() returns null rather than a canvas.
+        throw new PDFExportFailedError('document failed to initialize');
+      }
+      renderer.render(pageCanvas, sceneNode);
+      doc.endPage();
+    } finally {
+      doc.close();
+    }
+
+    const bytes = doc.getOutput();
+    if (bytes.length === 0) {
+      // close() ran but no bytes were produced — surface a failure rather
+      // than handing back a 0-byte "PDF" Blob.
+      throw new PDFExportFailedError('empty document output');
+    }
+    // The Blob constructor copies `bytes` synchronously, so it is safe to
+    // release the document (and its retained output buffer) right after.
+    return new Blob([bytes as BlobPart], { type: 'application/pdf' });
+  } finally {
+    // JsPDFDocument is a raw-pointer Embind object; JS must free it
+    // explicitly or the wrapper and its retained PDF buffer leak.
+    doc.delete();
+  }
 }

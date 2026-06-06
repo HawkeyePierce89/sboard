@@ -23,6 +23,12 @@ RUN git clone --depth=1 -b ${SKIA_REF} https://skia.googlesource.com/skia.git
 WORKDIR /workspace/skia
 RUN python3 tools/git-sync-deps
 
+# Apply the CanvasKit PDF JS-binding patch. git-sync-deps only fetches
+# third-party deps and does not touch modules/canvaskit/, so applying the
+# patch right after the clone+sync is deterministic and conflict-free.
+COPY canvaskit-pdf-bindings.patch /workspace/canvaskit-pdf-bindings.patch
+RUN git apply /workspace/canvaskit-pdf-bindings.patch
+
 COPY build.sh /workspace/build.sh
 RUN chmod +x /workspace/build.sh
 

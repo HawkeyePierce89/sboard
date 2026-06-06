@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Container, Graphics } from 'pixi.js';
 import type { CanvasKit } from 'canvaskit-wasm';
 import {
+  PDFExportFailedError,
   PDFExportNotSupportedError,
   exportToPDF,
   hasPDFSupport,
@@ -16,6 +17,7 @@ interface SpyPDFDocument extends PDFDocument {
   _beginPageCalls: Array<[number, number]>;
   _endPageCalled: number;
   _closeCalled: number;
+  _deleteCalled: number;
   _output: Uint8Array;
 }
 
@@ -38,6 +40,7 @@ function makePageCanvas(): unknown {
 function makeMockPDFCanvasKit(
   outputFactory: () => Uint8Array = () =>
     new TextEncoder().encode('%PDF-1.4\n%mock-body\n%%EOF\n'),
+  opts: { beginPageReturnsNull?: boolean } = {},
 ): MockPDFCanvasKit {
   const docs: SpyPDFDocument[] = [];
   const pageCanvases = new WeakMap<SpyPDFDocument, unknown>();
@@ -48,10 +51,11 @@ function makeMockPDFCanvasKit(
       _beginPageCalls: [],
       _endPageCalled: 0,
       _closeCalled: 0,
+      _deleteCalled: 0,
       _output: outputFactory(),
       beginPage(width: number, height: number) {
         this._beginPageCalls.push([width, height]);
-        return pageCanvas as never;
+        return (opts.beginPageReturnsNull ? null : pageCanvas) as never;
       },
       endPage() {
         this._endPageCalled += 1;
@@ -61,6 +65,9 @@ function makeMockPDFCanvasKit(
       },
       getOutput() {
         return this._output;
+      },
+      delete() {
+        this._deleteCalled += 1;
       },
     };
     docs.push(doc);
@@ -154,6 +161,7 @@ describe('exportToPDF — happy path', () => {
     expect(doc._beginPageCalls).toEqual([[640, 480]]);
     expect(doc._endPageCalled).toBe(1);
     expect(doc._closeCalled).toBe(1);
+    expect(doc._deleteCalled).toBe(1);
   });
 
   it('forwards optional metadata to MakePDFDocument', async () => {
@@ -218,6 +226,31 @@ describe('exportToPDF — failure modes', () => {
     await expect(exportToPDF(mock.ck, root, 100, 100)).rejects.toThrow('boom');
     expect(mock.docs).toHaveLength(1);
     expect(mock.docs[0]._closeCalled).toBe(1);
+    // The document is freed even when rendering throws.
+    expect(mock.docs[0]._deleteCalled).toBe(1);
+  });
+
+  it('throws PDFExportFailedError and frees the doc when beginPage returns null', async () => {
+    const mock = makeMockPDFCanvasKit(undefined, { beginPageReturnsNull: true });
+    const root = new Container();
+
+    await expect(exportToPDF(mock.ck, root, 100, 100)).rejects.toBeInstanceOf(
+      PDFExportFailedError,
+    );
+    expect(mock.docs).toHaveLength(1);
+    expect(mock.docs[0]._closeCalled).toBe(1);
+    expect(mock.docs[0]._deleteCalled).toBe(1);
+  });
+
+  it('throws PDFExportFailedError and frees the doc when getOutput is empty', async () => {
+    const mock = makeMockPDFCanvasKit(() => new Uint8Array(0));
+    const root = new Container();
+
+    await expect(exportToPDF(mock.ck, root, 100, 100)).rejects.toBeInstanceOf(
+      PDFExportFailedError,
+    );
+    expect(mock.docs).toHaveLength(1);
+    expect(mock.docs[0]._deleteCalled).toBe(1);
   });
 });
 
@@ -237,8 +270,13 @@ describe('exportToPDF — integration smoke (real CanvasKit)', () => {
 
   beforeEach(async () => {
     try {
-      // Import the bundled (stock or rebuilt) canvaskit-wasm. In jsdom the
-      // node binding loads via Buffer-backed fetch; if that fails we skip.
+      // NOTE: this imports the `canvaskit-wasm` npm package, which never ships
+      // the PDF binding — so the `%PDF-` branch below is unreachable here and
+      // this is only a guard-path smoke test. The patched binding lives in the
+      // project's `public/canvaskit/` artifact (loaded by the app, not by this
+      // import); exercising it is the manual Post-Completion check in the plan.
+      // In jsdom the node binding loads via Buffer-backed fetch; if that fails
+      // we skip.
       const mod = (await import('canvaskit-wasm')) as unknown as {
         default: (opts?: { locateFile?: (f: string) => string }) => Promise<CanvasKit>;
       };

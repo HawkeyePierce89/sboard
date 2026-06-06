@@ -7,7 +7,10 @@ import {
   wireExportButton,
   type ExportFn,
 } from '../../src/ui/export-button';
-import { PDFExportNotSupportedError } from '../../src/skia/pdf-exporter';
+import {
+  PDFExportFailedError,
+  PDFExportNotSupportedError,
+} from '../../src/skia/pdf-exporter';
 
 function setupDom(buttonId = 'btn-export-pdf'): HTMLButtonElement {
   document.body.innerHTML = '';
@@ -357,6 +360,12 @@ describe('formatExportError', () => {
 
   it('formats a generic Error with its message', () => {
     expect(formatExportError(new Error('boom'))).toBe('PDF export failed: boom');
+  });
+
+  it('does not double-prefix a PDFExportFailedError', () => {
+    expect(formatExportError(new PDFExportFailedError('empty document output'))).toBe(
+      'PDF export failed: empty document output',
+    );
   });
 
   it('produces a stable fallback for non-Error values', () => {
