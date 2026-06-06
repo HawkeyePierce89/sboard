@@ -29,8 +29,8 @@ GitHub Actions emits a Node 20 deprecation warning. Bump the pinned action versi
 
 ### Task 2: Verify acceptance criteria
 
-- [ ] confirm `git diff .github/workflows/deploy.yml` shows exactly the three intended line changes and nothing else
-- [ ] confirm no remaining references to `@v4` for checkout/setup-node or `node-version: '20'` in the workflow
+- [x] confirm `git diff .github/workflows/deploy.yml` shows exactly the three intended line changes and nothing else
+- [x] confirm no remaining references to `@v4` for checkout/setup-node or `node-version: '20'` in the workflow
 
 ## Post-Completion (manual / external)
 - Push to `master` (or trigger `workflow_dispatch`) and confirm the deploy workflow runs green on Node 22 with no Node 20 deprecation warning
