@@ -54,10 +54,10 @@ We bridge it exactly the way the codebase already bridges the PDF runtime/types 
 - Modify: `tests/skia/pdf-exporter.test.ts`
 - Modify: `tests/app.test.ts`
 
-- [ ] In `tests/skia/pdf-exporter.test.ts`: replace the `PathBuilderCtor` mock (lines ~89-100) with a `PathCtor` registered as `ck.Path` returning `{ moveTo, lineTo, addRect, addOval, addCircle, close, delete }` (no `detach`)
-- [ ] Update the bare `PathBuilder: vi.fn()` stub (~line 207) and the "ThrowingPathBuilder" failure-mode stub (~line 219) to target `ck.Path` so rendering still constructs/throws as intended
-- [ ] In `tests/app.test.ts`: update the line ~268 comment that mentions "PathBuilder constructors" to reference `Path`
-- [ ] run `npm test` — must pass
+- [x] In `tests/skia/pdf-exporter.test.ts`: replace the `PathBuilderCtor` mock (lines ~89-100) with a `PathCtor` registered as `ck.Path` returning `{ moveTo, lineTo, addRect, addOval, addCircle, close, delete }` (no `detach`)
+- [x] Update the bare `PathBuilder: vi.fn()` stub (~line 207) and the "ThrowingPathBuilder" failure-mode stub (~line 219) to target `ck.Path` so rendering still constructs/throws as intended
+- [x] In `tests/app.test.ts`: update the line ~268 comment that mentions "PathBuilder constructors" to reference `Path`
+- [x] run `npm test` — must pass
 
 ### Task 3: Verify acceptance criteria
 
