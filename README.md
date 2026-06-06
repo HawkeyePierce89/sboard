@@ -49,7 +49,9 @@ Deployed via GitHub Actions to GitHub Pages on every push to `master`:
 
 ## Prerequisites
 
-- **Node.js 20+** and npm (the CI build uses Node 20).
+- **Node.js 22.13+** and npm (the CI build uses Node 22). Some dependencies
+  declare a `^22.13.0` engine floor, so earlier 22.x patches can trip
+  `EBADENGINE` warnings or strict installs.
 - **Docker** — only required when *rebuilding* CanvasKit with the PDF backend.
   The repository ships pre-built `canvaskit.js` / `canvaskit.wasm` under
   `public/canvaskit/`, so day-to-day development does **not** need Docker.
