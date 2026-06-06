@@ -21,11 +21,11 @@ GitHub Actions emits a Node 20 deprecation warning. Bump the pinned action versi
 **Files:**
 - Modify: `.github/workflows/deploy.yml`
 
-- [ ] update `actions/checkout@v4` → `@v5` (line 25)
-- [ ] update `actions/setup-node@v4` → `@v5` (line 28)
-- [ ] update `node-version: '20'` → `'22'` (line 30)
-- [ ] confirm `actions/configure-pages@v5`, `actions/upload-pages-artifact@v3`, `actions/deploy-pages@v4` are left unchanged
-- [ ] validate YAML is still well-formed (e.g. `npx --yes yaml-lint .github/workflows/deploy.yml` or equivalent)
+- [x] update `actions/checkout@v4` → `@v5` (line 25)
+- [x] update `actions/setup-node@v4` → `@v5` (line 28)
+- [x] update `node-version: '20'` → `'22'` (line 30)
+- [x] confirm `actions/configure-pages@v5`, `actions/upload-pages-artifact@v3`, `actions/deploy-pages@v4` are left unchanged
+- [x] validate YAML is still well-formed (e.g. `npx --yes yaml-lint .github/workflows/deploy.yml` or equivalent)
 
 ### Task 2: Verify acceptance criteria
 
