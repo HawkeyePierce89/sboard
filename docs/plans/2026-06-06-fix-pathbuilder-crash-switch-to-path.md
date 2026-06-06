@@ -61,7 +61,7 @@ We bridge it exactly the way the codebase already bridges the PDF runtime/types 
 
 ### Task 3: Verify acceptance criteria
 
-- [ ] run `npm test` (full suite) — all green
-- [ ] run `npm run typecheck` — no errors
-- [ ] run `npm run lint` — no new errors
-- [ ] grep `src` + `tests` for any remaining `PathBuilder` reference — expect none
+- [x] run `npm test` (full suite) — all green (227 passed, 1 skipped)
+- [x] run `npm run typecheck` — no errors
+- [x] run `npm run lint` — no new errors
+- [x] grep `src` + `tests` for any remaining `PathBuilder` reference — only explanatory comments remain in `src/skia/types.ts` documenting the fix rationale (no live usage)
